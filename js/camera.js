@@ -4,11 +4,11 @@ const JPEG_Q = 0.85;
 export function setupCameraInput(onReady) {
   const input = document.getElementById('camera-input');
   input.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
     input.value = '';
-    const result = await processImage(file);
-    onReady(result);
+    const results = await Promise.all(files.map(processImage));
+    onReady(results);
   });
 }
 

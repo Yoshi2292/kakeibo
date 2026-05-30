@@ -1,12 +1,15 @@
 import { initAuth, login, isLoggedIn, logout } from './auth.js';
 import { setupCameraInput } from './camera.js';
-import { analyzeReceipt } from './ocr.js';
+import { analyzeReceipts } from './ocr.js';
 import { appendRow } from './sheets.js';
 
 // ── State ─────────────────────────────────
-let capturedImage = null; // { dataUrl, base64 }
+let capturedImages = []; // [{dataUrl, base64}, ...]
+let ocrResults    = []; // [{date, store, amount, ...}, ...]
+let currentIndex  = 0;
+let autoSave      = false;
 
-// ── DOM refs ──────────────────────────────
+// ── DOM ───────────────────────────────────
 const $ = (id) => document.getElementById(id);
 const SECTIONS = ['auth', 'camera', 'form', 'success'];
 
@@ -22,8 +25,9 @@ const SECTIONS = ['auth', 'camera', 'form', 'success'];
 
   buildCategoryOptions();
   buildUserOptions();
-  bindEvents();
   setDefaultDate();
+  loadAutoSavePref();
+  bindEvents();
 
   showSection(isLoggedIn() ? 'camera' : 'auth');
 
@@ -32,16 +36,12 @@ const SECTIONS = ['auth', 'camera', 'form', 'success'];
   }
 })();
 
-// ── Event bindings ────────────────────────
+// ── Events ────────────────────────────────
 function bindEvents() {
   // Auth
   $('btn-login').addEventListener('click', async () => {
-    try {
-      await login();
-      showSection('camera');
-    } catch {
-      showToast('ログインに失敗しました。ポップアップが許可されているか確認してください。', 'error');
-    }
+    try { await login(); showSection('camera'); }
+    catch { showToast('ログインに失敗しました', 'error'); }
   });
 
   $('btn-logout').addEventListener('click', () => {
@@ -50,32 +50,42 @@ function bindEvents() {
     showToast('ログアウトしました');
   });
 
-  // Camera input
-  setupCameraInput((img) => {
-    capturedImage = img;
-    $('preview-img').src = img.dataUrl;
-    $('preview-wrap').classList.remove('hidden');
-    $('camera-placeholder').classList.add('hidden');
-    $('btn-ocr').classList.remove('hidden');
+  // Auto-save toggle
+  $('toggle-autosave').addEventListener('change', (e) => {
+    autoSave = e.target.checked;
+    localStorage.setItem('autosave', autoSave ? '1' : '0');
   });
 
-  $('btn-retake').addEventListener('click', () => {
-    capturedImage = null;
+  // Camera
+  setupCameraInput((images) => {
+    capturedImages = images;
+    renderThumbnails(images);
+    $('camera-placeholder').classList.add('hidden');
     $('preview-wrap').classList.add('hidden');
-    $('camera-placeholder').classList.remove('hidden');
-    $('btn-ocr').classList.add('hidden');
+    $('btn-ocr').classList.remove('hidden');
+    $('btn-ocr').textContent = images.length > 1
+      ? `🔍 ${images.length}枚を一括OCR`
+      : '🔍 OCR で読み取る';
   });
+
+  $('btn-retake').addEventListener('click', resetCamera);
 
   // OCR
   $('btn-ocr').addEventListener('click', async () => {
-    if (!capturedImage) return;
+    if (!capturedImages.length) return;
     setOcrLoading(true);
     try {
-      const ocr = await analyzeReceipt(capturedImage.base64);
-      fillForm(ocr);
-      showSection('form');
+      ocrResults = await analyzeReceipts(capturedImages);
+      currentIndex = 0;
+      if (autoSave) {
+        await runAutoSave();
+      } else {
+        fillForm(ocrResults[0]);
+        updateFormProgress();
+        showSection('form');
+      }
     } catch (e) {
-      showToast('OCR 読み取りエラー: ' + e.message, 'error');
+      showToast('OCR エラー: ' + e.message, 'error');
     } finally {
       setOcrLoading(false);
     }
@@ -83,27 +93,34 @@ function bindEvents() {
 
   // Manual entry
   $('btn-manual').addEventListener('click', () => {
+    ocrResults = [{}];
+    currentIndex = 0;
     resetForm();
+    $('form-progress').textContent = '';
     showSection('form');
   });
 
-  // Form navigation
+  // Form
   $('btn-back-camera').addEventListener('click', () => showSection('camera'));
 
-  // Category cascade
   $('field-large-cat').addEventListener('change', (e) => {
     buildMediumOptions(e.target.value);
   });
 
-  // Save
   $('entry-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = readForm();
     setSaveLoading(true);
     try {
       await appendRow(data);
-      renderSuccessSummary(data);
-      showSection('success');
+      if (currentIndex < ocrResults.length - 1) {
+        currentIndex++;
+        fillForm(ocrResults[currentIndex]);
+        updateFormProgress();
+      } else {
+        renderSuccessSummary([data]);
+        showSection('success');
+      }
     } catch (e) {
       showToast('保存エラー: ' + e.message, 'error');
     } finally {
@@ -111,7 +128,7 @@ function bindEvents() {
     }
   });
 
-  // Continue
+  // Success
   $('btn-next').addEventListener('click', () => {
     resetCamera();
     resetForm();
@@ -119,11 +136,45 @@ function bindEvents() {
   });
 }
 
-// ── Section control ───────────────────────
+// ── Auto-save ─────────────────────────────
+async function runAutoSave() {
+  const total = ocrResults.length;
+  const saved = [];
+  setSaveLoading(true);
+  try {
+    for (let i = 0; i < total; i++) {
+      updateLoadingText(`${i + 1} / ${total} 件保存中...`);
+      await appendRow(ocrResults[i]);
+      saved.push(ocrResults[i]);
+    }
+    renderSuccessSummary(saved);
+    showSection('success');
+  } catch (e) {
+    showToast('保存エラー: ' + e.message, 'error');
+  } finally {
+    setSaveLoading(false);
+    updateLoadingText('保存中...');
+  }
+}
+
+// ── Sections ──────────────────────────────
 function showSection(name) {
   SECTIONS.forEach((s) => {
     $(`section-${s}`).classList.toggle('active', s === name);
   });
+}
+
+// ── Thumbnails ────────────────────────────
+function renderThumbnails(images) {
+  const wrap = $('thumb-queue');
+  wrap.innerHTML = '';
+  images.forEach((img, i) => {
+    const div = document.createElement('div');
+    div.className = 'thumb-item';
+    div.innerHTML = `<img src="${img.dataUrl}" alt=""><span class="thumb-badge">${i + 1}</span>`;
+    wrap.appendChild(div);
+  });
+  wrap.classList.toggle('hidden', images.length === 0);
 }
 
 // ── Category options ──────────────────────
@@ -133,15 +184,6 @@ function buildCategoryOptions() {
   Object.keys(CATEGORIES).forEach((cat) => {
     const opt = document.createElement('option');
     opt.value = opt.textContent = cat;
-    sel.appendChild(opt);
-  });
-}
-
-function buildUserOptions() {
-  const sel = $('field-user');
-  USERS.forEach((u) => {
-    const opt = document.createElement('option');
-    opt.value = opt.textContent = u;
     sel.appendChild(opt);
   });
 }
@@ -161,24 +203,30 @@ function buildMediumOptions(largeCat) {
   });
 }
 
+function buildUserOptions() {
+  const sel = $('field-user');
+  sel.innerHTML = '<option value="">選択してください</option>';
+  USERS.forEach((u) => {
+    const opt = document.createElement('option');
+    opt.value = opt.textContent = u;
+    sel.appendChild(opt);
+  });
+}
+
 // ── Form helpers ──────────────────────────
 function fillForm(ocr) {
   $('field-date').value = ocr.date ?? todayISO();
-
   if (ocr.large_category) {
     $('field-large-cat').value = ocr.large_category;
     buildMediumOptions(ocr.large_category);
   }
-  if (ocr.medium_category) {
-    $('field-medium-cat').value = ocr.medium_category;
-  }
-  if (ocr.store)  $('field-store').value  = ocr.store;
-  if (ocr.amount != null) $('field-amount').value = ocr.amount;
+  if (ocr.medium_category) $('field-medium-cat').value = ocr.medium_category;
+  $('field-store').value  = ocr.store  ?? '';
+  $('field-amount').value = ocr.amount ?? '';
 }
 
 function readForm() {
-  const fd = new FormData($('entry-form'));
-  return Object.fromEntries(fd.entries());
+  return Object.fromEntries(new FormData($('entry-form')).entries());
 }
 
 function resetForm() {
@@ -191,7 +239,12 @@ function setDefaultDate() {
   $('field-date').value = todayISO();
 }
 
-// ── Loading states ────────────────────────
+function updateFormProgress() {
+  const total = ocrResults.length;
+  $('form-progress').textContent = total > 1 ? `${currentIndex + 1}/${total}` : '';
+}
+
+// ── Loading ───────────────────────────────
 function setOcrLoading(on) {
   $('loading-ocr').classList.toggle('hidden', !on);
   $('btn-ocr').disabled = on;
@@ -203,21 +256,38 @@ function setSaveLoading(on) {
   $('btn-save').disabled = on;
 }
 
+function updateLoadingText(text) {
+  const p = $('loading-save').querySelector('p');
+  if (p) p.textContent = text;
+}
+
 // ── Camera reset ──────────────────────────
 function resetCamera() {
-  capturedImage = null;
+  capturedImages = [];
+  ocrResults = [];
+  currentIndex = 0;
   $('preview-wrap').classList.add('hidden');
   $('camera-placeholder').classList.remove('hidden');
   $('btn-ocr').classList.add('hidden');
+  $('thumb-queue').innerHTML = '';
+  $('thumb-queue').classList.add('hidden');
 }
 
-// ── Success summary ───────────────────────
-function renderSuccessSummary(d) {
-  $('success-summary').innerHTML = `
-    <p>${d.date}・${d.large_category} / ${d.medium_category}</p>
-    <p>${d.store || '（支払先なし）'}・<strong>¥${Number(d.amount || 0).toLocaleString()}</strong></p>
-    ${d.user ? `<p>使用者：${d.user}</p>` : ''}
-  `;
+// ── Success ───────────────────────────────
+function renderSuccessSummary(items) {
+  const html = items.map((d) => `
+    <div class="success-item">
+      <span>${d.date ?? ''}　${d.large_category ?? ''} / ${d.medium_category ?? ''}</span>
+      <span>${d.store ?? ''}　<strong>¥${Number(d.amount || 0).toLocaleString()}</strong></span>
+    </div>
+  `).join('');
+  $('success-summary').innerHTML = html;
+}
+
+// ── Prefs ─────────────────────────────────
+function loadAutoSavePref() {
+  autoSave = localStorage.getItem('autosave') === '1';
+  $('toggle-autosave').checked = autoSave;
 }
 
 // ── Toast ─────────────────────────────────
@@ -230,7 +300,6 @@ function showToast(msg, type = 'info') {
   _toastTimer = setTimeout(() => el.classList.remove('visible'), 3500);
 }
 
-// ── Utility ───────────────────────────────
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
