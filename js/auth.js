@@ -6,7 +6,7 @@ export async function initAuth() {
   await waitForGIS();
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CONFIG.GOOGLE_CLIENT_ID,
-    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/cloud-vision',
     callback: () => {},
   });
 }
