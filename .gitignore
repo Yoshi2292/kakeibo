@@ -1,1 +1,2 @@
 # 実際の API キー入り設定ファイル（GitHub Actions がシークレットから生成する）
+config.js
