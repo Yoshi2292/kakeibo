@@ -1,5 +1,5 @@
 import { initAuth, login, isLoggedIn, logout } from './auth.js';
-import { setupCameraInput } from './camera.js';
+import { setupCameraInput, MAX_PX } from './camera.js';
 import { analyzeReceipts } from './ocr.js';
 import { appendRow } from './sheets.js';
 
@@ -29,6 +29,8 @@ const SECTIONS = ['auth', 'camera', 'form', 'success'];
   setDefaultDate();
   loadAutoSavePref();
   bindEvents();
+
+  $('app-version').textContent = `${CONFIG.CLAUDE_MODEL} / ${MAX_PX}px`;
 
   showSection(isLoggedIn() ? 'camera' : 'auth');
 
