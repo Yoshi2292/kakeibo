@@ -6,6 +6,7 @@ import { appendRow } from './sheets.js';
 // ── State ─────────────────────────────────
 let capturedImages = []; // [{dataUrl, base64}, ...]
 let ocrResults    = []; // [{date, store, amount, ...}, ...]
+let savedResults  = []; // 手動モードで保存済みの件数
 let currentIndex  = 0;
 let autoSave      = false;
 
@@ -77,6 +78,7 @@ function bindEvents() {
     try {
       ocrResults = await analyzeReceipts(capturedImages);
       currentIndex = 0;
+      savedResults = [];
       if (autoSave) {
         await runAutoSave();
       } else {
@@ -113,12 +115,16 @@ function bindEvents() {
     setSaveLoading(true);
     try {
       await appendRow(data);
+      savedResults.push(data);
       if (currentIndex < ocrResults.length - 1) {
         currentIndex++;
         fillForm(ocrResults[currentIndex]);
         updateFormProgress();
+        const remaining = ocrResults.length - currentIndex;
+        $('btn-save').textContent = `💾 保存して次へ（残り${remaining}件）`;
       } else {
-        renderSuccessSummary([data]);
+        $('btn-save').textContent = '💾 Google Sheets に保存';
+        renderSuccessSummary(savedResults);
         showSection('success');
       }
     } catch (e) {
@@ -140,17 +146,22 @@ function bindEvents() {
 async function runAutoSave() {
   const total = ocrResults.length;
   const saved = [];
+  const failed = [];
   setSaveLoading(true);
   try {
     for (let i = 0; i < total; i++) {
       updateLoadingText(`${i + 1} / ${total} 件保存中...`);
-      await appendRow(ocrResults[i]);
-      saved.push(ocrResults[i]);
+      try {
+        await appendRow(ocrResults[i]);
+        saved.push(ocrResults[i]);
+      } catch (e) {
+        console.error(`[kakeibo] 保存失敗 ${i + 1}件目:`, e);
+        failed.push(i + 1);
+      }
     }
+    if (failed.length) showToast(`${failed.join(',')}件目の保存に失敗しました`, 'error');
     renderSuccessSummary(saved);
     showSection('success');
-  } catch (e) {
-    showToast('保存エラー: ' + e.message, 'error');
   } finally {
     setSaveLoading(false);
     updateLoadingText('保存中...');
