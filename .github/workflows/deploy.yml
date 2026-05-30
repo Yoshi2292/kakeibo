@@ -25,6 +25,7 @@ jobs:
           rsync -a \
             --exclude='.git' \
             --exclude='.github' \
+            --exclude='.gitignore' \
             --exclude='_deploy' \
             --exclude='cloudflare-worker' \
             --exclude='config.js' \
