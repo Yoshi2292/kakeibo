@@ -2,7 +2,13 @@ const MAX_PX = 1200;
 const JPEG_Q = 0.85;
 
 export function setupCameraInput(onReady) {
-  const input = document.getElementById('camera-input');
+  setupInput('camera-input', onReady);
+  setupInput('gallery-input', onReady);
+}
+
+function setupInput(id, onReady) {
+  const input = document.getElementById(id);
+  if (!input) return;
   input.addEventListener('change', async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
