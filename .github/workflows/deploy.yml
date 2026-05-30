@@ -1,0 +1,44 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create config.js from repository secrets
+        env:
+          CLAUDE_PROXY_URL: ${{ secrets.CLAUDE_PROXY_URL }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          SPREADSHEET_ID:   ${{ secrets.SPREADSHEET_ID }}
+        run: |
+          cat > config.js << 'EOF'
+          const CONFIG = {
+            CLAUDE_PROXY_URL: '__CLAUDE_PROXY_URL__',
+            GOOGLE_CLIENT_ID: '__GOOGLE_CLIENT_ID__',
+            SPREADSHEET_ID:   '__SPREADSHEET_ID__',
+            SHEET_NAME:       '2025',
+            CLAUDE_MODEL:     'claude-sonnet-4-6',
+          };
+          const CATEGORIES = {
+            '支出': ['医療費', '食費', '外食費', '車関係費', '日用雑貨', '被服費'],
+            '収入': ['給与', 'その他収入'],
+          };
+          EOF
+          sed -i "s|__CLAUDE_PROXY_URL__|${CLAUDE_PROXY_URL}|g" config.js
+          sed -i "s|__GOOGLE_CLIENT_ID__|${GOOGLE_CLIENT_ID}|g" config.js
+          sed -i "s|__SPREADSHEET_ID__|${SPREADSHEET_ID}|g"     config.js
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
