@@ -1,5 +1,8 @@
-export const MAX_PX = 1568;
+let _maxPx = 1568;
 const JPEG_Q = 0.75;
+
+export function setMaxPx(px) { _maxPx = px; }
+export function getMaxPx() { return _maxPx; }
 
 export function setupCameraInput(onReady) {
   setupInput('camera-input', onReady);
@@ -41,7 +44,7 @@ function processImage(file) {
 }
 
 function scaledSize(w, h) {
-  if (w <= MAX_PX && h <= MAX_PX) return { w, h };
-  if (w >= h) return { w: MAX_PX, h: Math.round(h * MAX_PX / w) };
-  return { w: Math.round(w * MAX_PX / h), h: MAX_PX };
+  if (w <= _maxPx && h <= _maxPx) return { w, h };
+  if (w >= h) return { w: _maxPx, h: Math.round(h * _maxPx / w) };
+  return { w: Math.round(w * _maxPx / h), h: _maxPx };
 }

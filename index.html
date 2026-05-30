@@ -58,6 +58,25 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
+      <div class="ocr-settings">
+        <div class="ocr-settings-row">
+          <label for="sel-model">モデル</label>
+          <select id="sel-model" class="sel-small">
+            <option value="claude-haiku-4-5-20251001">Haiku</option>
+            <option value="claude-sonnet-4-6">Sonnet</option>
+          </select>
+        </div>
+        <div class="ocr-settings-row">
+          <label for="sel-maxpx">解像度</label>
+          <select id="sel-maxpx" class="sel-small">
+            <option value="600">600px</option>
+            <option value="800">800px</option>
+            <option value="1200">1200px</option>
+            <option value="1568">1568px</option>
+            <option value="4096">元画像（4K相当）</option>
+          </select>
+        </div>
+      </div>
       <div id="thumb-queue" class="thumb-queue hidden"></div>
       <div class="camera-actions">
         <label for="camera-input" id="label-camera" class="btn btn-primary btn-large">
