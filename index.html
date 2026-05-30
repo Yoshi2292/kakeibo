@@ -48,11 +48,19 @@
         <div class="placeholder-icon">🧾</div>
         <p>レシートを撮影してください</p>
       </div>
+      <div class="mode-toggle-row">
+        <span class="mode-label">自動保存モード</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-autosave">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div id="thumb-queue" class="thumb-queue hidden"></div>
       <div class="camera-actions">
         <label for="camera-input" id="label-camera" class="btn btn-primary btn-large">
-          📷 レシートを撮影
+          📷 レシートを撮影・選択
         </label>
-        <input type="file" id="camera-input" accept="image/*" capture="environment" class="visually-hidden">
+        <input type="file" id="camera-input" accept="image/*" capture="environment" multiple class="visually-hidden">
         <button id="btn-manual" class="btn btn-outline btn-large">✏️ 手動で入力</button>
         <button id="btn-ocr" class="btn btn-secondary btn-large hidden">🔍 OCR で読み取る</button>
       </div>
@@ -68,7 +76,7 @@
     <header class="app-header">
       <button id="btn-back-camera" class="btn-icon" aria-label="戻る">←</button>
       <h1>内容を確認・編集</h1>
-      <div style="width:40px"></div>
+      <span id="form-progress" class="form-progress"></span>
     </header>
     <form id="entry-form" class="form-container" novalidate>
       <div class="form-group">
