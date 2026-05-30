@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>アイコン生成</title>
+  <style>
+    body { font-family: sans-serif; padding: 32px; }
+    button { margin: 8px; padding: 12px 24px; font-size: 16px; cursor: pointer; }
+    canvas { display: block; margin: 16px 0; }
+  </style>
+</head>
+<body>
+  <h2>PWA アイコン生成ツール</h2>
+  <p>ボタンを押すと PNG がダウンロードされます。<br>
+     生成した PNG をこの <code>icons/</code> フォルダに保存してください。</p>
+  <button onclick="generate(192)">icon-192.png を生成・DL</button>
+  <button onclick="generate(512)">icon-512.png を生成・DL</button>
+  <canvas id="c"></canvas>
+
+  <script>
+    function generate(size) {
+      const c = document.getElementById('c');
+      c.width = c.height = size;
+      const ctx = c.getContext('2d');
+
+      // 背景（緑）
+      ctx.fillStyle = '#2e7d32';
+      ctx.fillRect(0, 0, size, size);
+
+      // 白い角丸カード風
+      const pad = size * 0.15;
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      roundRect(ctx, pad, pad, size - pad * 2, size - pad * 2, size * 0.12);
+      ctx.fill();
+
+      // 絵文字
+      ctx.font = `${size * 0.48}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('📋', size / 2, size / 2 + size * 0.02);
+
+      const a = document.createElement('a');
+      a.href = c.toDataURL('image/png');
+      a.download = `icon-${size}.png`;
+      a.click();
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.arcTo(x + w, y, x + w, y + r, r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+      ctx.lineTo(x + r, y + h);
+      ctx.arcTo(x, y + h, x, y + h - r, r);
+      ctx.lineTo(x, y + r);
+      ctx.arcTo(x, y, x + r, y, r);
+      ctx.closePath();
+    }
+  </script>
+</body>
+</html>

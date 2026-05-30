@@ -1,0 +1,6 @@
+name = "kakeibo-claude-proxy"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# CLAUDE_API_KEY はシークレットとして登録（平文でここに書かない）
+# 登録コマンド: wrangler secret put CLAUDE_API_KEY
