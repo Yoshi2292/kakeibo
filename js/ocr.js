@@ -37,7 +37,7 @@ export async function analyzeReceipts(images) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: CONFIG.CLAUDE_MODEL,
-      max_tokens: 300 * images.length,
+      max_tokens: 512 * images.length,
       messages: [{ role: 'user', content }],
     }),
   });
@@ -48,15 +48,17 @@ export async function analyzeReceipts(images) {
   }
 
   const data = await res.json();
-  const text = data.content?.[0]?.text?.trim() ?? '';
+  // コードブロック・余分なテキストを除去してから JSON を抽出
+  const raw = data.content?.[0]?.text?.trim() ?? '';
+  const cleaned = raw.replace(/```(?:json)?/g, '').trim();
 
   if (images.length === 1) {
-    const match = text.match(/\{[\s\S]*?\}/);
+    const match = cleaned.match(/\{[\s\S]*?\}/);
     if (!match) throw new Error('OCR 結果の解析に失敗しました');
     return [JSON.parse(match[0])];
   }
 
-  const match = text.match(/\[[\s\S]*\]/);
+  const match = cleaned.match(/\[[\s\S]*\]/);
   if (!match) throw new Error('OCR 結果の解析に失敗しました');
   return JSON.parse(match[0]);
 }
