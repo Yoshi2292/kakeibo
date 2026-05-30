@@ -11,16 +11,20 @@ export async function initAuth() {
   });
 }
 
-function waitForGIS() {
-  return new Promise((resolve) => {
+function waitForGIS(timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
     if (typeof google !== 'undefined' && google.accounts?.oauth2) {
       resolve();
       return;
     }
+    const deadline = Date.now() + timeoutMs;
     const id = setInterval(() => {
       if (typeof google !== 'undefined' && google.accounts?.oauth2) {
         clearInterval(id);
         resolve();
+      } else if (Date.now() > deadline) {
+        clearInterval(id);
+        reject(new Error('Google Identity Services の読み込みがタイムアウトしました。ネットワーク接続を確認してください。'));
       }
     }, 100);
   });
