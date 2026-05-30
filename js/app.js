@@ -76,7 +76,9 @@ function bindEvents() {
     if (!capturedImages.length) return;
     setOcrLoading(true);
     try {
+      console.log(`[kakeibo] 送信画像数: ${capturedImages.length}`);
       ocrResults = await analyzeReceipts(capturedImages);
+      console.log(`[kakeibo] OCR結果数: ${ocrResults.length}`, ocrResults);
       currentIndex = 0;
       savedResults = [];
       if (autoSave) {
@@ -92,6 +94,12 @@ function bindEvents() {
       setOcrLoading(false);
     }
   });
+
+  // Gallery label も OCR ボタン表示対象に
+  const galleryLabel = document.getElementById('label-gallery');
+  if (galleryLabel) {
+    // gallery-input の変更は camera.js 側で処理済み
+  }
 
   // Manual entry
   $('btn-manual').addEventListener('click', () => {

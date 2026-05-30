@@ -58,9 +58,13 @@
       <div id="thumb-queue" class="thumb-queue hidden"></div>
       <div class="camera-actions">
         <label for="camera-input" id="label-camera" class="btn btn-primary btn-large">
-          📷 レシートを撮影・選択
+          📷 カメラで撮影（1枚）
         </label>
-        <input type="file" id="camera-input" accept="image/*" capture="environment" multiple class="visually-hidden">
+        <input type="file" id="camera-input" accept="image/*" capture="environment" class="visually-hidden">
+        <label for="gallery-input" id="label-gallery" class="btn btn-outline btn-large">
+          🖼 ライブラリから選択（複数可）
+        </label>
+        <input type="file" id="gallery-input" accept="image/*" multiple class="visually-hidden">
         <button id="btn-manual" class="btn btn-outline btn-large">✏️ 手動で入力</button>
         <button id="btn-ocr" class="btn btn-secondary btn-large hidden">🔍 OCR で読み取る</button>
       </div>
