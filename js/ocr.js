@@ -1,5 +1,9 @@
 const CATEGORIES_HINT = '食費/日用雑貨/外食費/医療費/被服費/電気代/水道代/交際費/スマホ通信費/スマホローン/都民共済/金・銀・プラチナ積立/プロバイダ料金/車関係費/フィットネス費/ペット費/教育費/娯楽費/税金/悠真おこづかい/給与/子供手当/その他';
 
+let _model = null;
+export function setModel(model) { _model = model; }
+export function getModel() { return _model ?? CONFIG.CLAUDE_MODEL; }
+
 function buildPrompt(count) {
   const today = new Date().toISOString().slice(0, 10);
   const common = `
@@ -50,7 +54,7 @@ export async function analyzeReceipts(images) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: CONFIG.CLAUDE_MODEL,
+      model: getModel(),
       max_tokens: 512 * images.length,
       messages: [{ role: 'user', content }],
     }),

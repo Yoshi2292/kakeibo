@@ -1,6 +1,6 @@
 import { initAuth, login, isLoggedIn, logout } from './auth.js';
-import { setupCameraInput, MAX_PX } from './camera.js';
-import { analyzeReceipts } from './ocr.js';
+import { setupCameraInput, setMaxPx, getMaxPx } from './camera.js';
+import { analyzeReceipts, setModel, getModel } from './ocr.js';
 import { appendRow } from './sheets.js';
 
 // ── State ─────────────────────────────────
@@ -28,9 +28,8 @@ const SECTIONS = ['auth', 'camera', 'form', 'success'];
   buildUserOptions();
   setDefaultDate();
   loadAutoSavePref();
+  loadOcrPrefs();
   bindEvents();
-
-  $('app-version').textContent = `${CONFIG.CLAUDE_MODEL} / ${MAX_PX}px`;
 
   showSection(isLoggedIn() ? 'camera' : 'auth');
 
@@ -57,6 +56,19 @@ function bindEvents() {
   $('toggle-autosave').addEventListener('change', (e) => {
     autoSave = e.target.checked;
     localStorage.setItem('autosave', autoSave ? '1' : '0');
+  });
+
+  // OCR settings
+  $('sel-model').addEventListener('change', (e) => {
+    setModel(e.target.value);
+    localStorage.setItem('ocr-model', e.target.value);
+    updateVersionLabel();
+  });
+
+  $('sel-maxpx').addEventListener('change', (e) => {
+    setMaxPx(Number(e.target.value));
+    localStorage.setItem('ocr-maxpx', e.target.value);
+    updateVersionLabel();
   });
 
   // Camera
@@ -309,6 +321,21 @@ function renderSuccessSummary(items) {
 function loadAutoSavePref() {
   autoSave = localStorage.getItem('autosave') === '1';
   $('toggle-autosave').checked = autoSave;
+}
+
+function loadOcrPrefs() {
+  const model = localStorage.getItem('ocr-model') ?? CONFIG.CLAUDE_MODEL;
+  const px    = Number(localStorage.getItem('ocr-maxpx') ?? 1568);
+  setModel(model);
+  setMaxPx(px);
+  $('sel-model').value = model;
+  $('sel-maxpx').value = String(px);
+  updateVersionLabel();
+}
+
+function updateVersionLabel() {
+  const label = getModel().includes('sonnet') ? 'Sonnet' : 'Haiku';
+  $('app-version').textContent = `${label} / ${getMaxPx()}px`;
 }
 
 // ── Toast ─────────────────────────────────

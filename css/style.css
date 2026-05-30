@@ -422,6 +422,30 @@ html, body {
 
 .mode-label { font-size: 15px; font-weight: 500; }
 
+.ocr-settings {
+  background: var(--c-surface);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ocr-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.sel-small {
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: #fff;
+}
+
 .toggle-switch { position: relative; width: 48px; height: 28px; flex-shrink: 0; }
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
 
