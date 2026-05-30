@@ -4,7 +4,7 @@ function buildPrompt(count) {
   const today = new Date().toISOString().slice(0, 10);
   const common = `
 - date: レシートに印字された日付をYYYY-MM-DD形式で。不明ならnull。今日は${today}
-- store: 支店名・店舗名まで含む正式名称（例：無印良品むさし村山店）。不明ならnull
+- store: レシートに印字された文字を一字一句そのまま読み取った支店名・店舗名。記憶・推測・補完は絶対にしないこと。不明ならnull
 - amount: レシートの合計金額（数値のみ）。不明ならnull
 - large_category: "支出" または "収入"
 - medium_category: ${CATEGORIES_HINT} から最適なもの`.trim();
