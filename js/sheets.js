@@ -2,8 +2,11 @@ import { getToken } from './auth.js';
 
 // 日付文字列（YYYY-MM-DD）→ シート名（YYYY.M）
 function dateToSheetName(dateStr) {
-  const d = new Date(dateStr);
-  if (!dateStr || isNaN(d.getTime())) return CONFIG.SHEET_NAME;
+  const d = new Date(dateStr || Date.now());
+  if (isNaN(d.getTime())) {
+    const now = new Date();
+    return `${now.getFullYear()}.${now.getMonth() + 1}`;
+  }
   return `${d.getFullYear()}.${d.getMonth() + 1}`;
 }
 
