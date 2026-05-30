@@ -1,5 +1,12 @@
 import { getToken } from './auth.js';
 
+// 日付文字列（YYYY-MM-DD）→ シート名（YYYY.M）
+function dateToSheetName(dateStr) {
+  const d = new Date(dateStr);
+  if (!dateStr || isNaN(d.getTime())) return CONFIG.SHEET_NAME;
+  return `${d.getFullYear()}.${d.getMonth() + 1}`;
+}
+
 export async function appendRow(fields) {
   const token = await getToken();
 
@@ -12,7 +19,8 @@ export async function appendRow(fields) {
     fields.user          ?? '',
   ];
 
-  const range = encodeURIComponent(`'${CONFIG.SHEET_NAME}'!A:F`);
+  const sheetName = dateToSheetName(fields.date);
+  const range = encodeURIComponent(`'${sheetName}'`) + '!A:F';
   const url = [
     `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}`,
     `/values/${range}:append`,
