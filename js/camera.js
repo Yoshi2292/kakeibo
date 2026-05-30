@@ -1,4 +1,4 @@
-let _maxPx = 1568;
+let _maxPx = 800;
 const JPEG_Q = 0.75;
 
 export function setMaxPx(px) { _maxPx = px; }
