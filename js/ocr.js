@@ -5,7 +5,7 @@ const PROMPT = `このレシート画像から情報を抽出し、以下のJSON
   "store": "店名・支払先（不明ならnull）",
   "amount": 合計金額の数値（税込み・円、不明ならnull）,
   "large_category": "支出 または 収入",
-  "medium_category": "食費 / 外食費 / 医療費 / 車関係費 / 日用雑貨 / 被服費 / その他 から最適なもの"
+  "medium_category": "食費/日用雑貨/外食費/医療費/被服費/電気代/水道代/交際費/スマホ通信費/スマホローン/都民共済/金・銀・プラチナ積立/プロバイダ料金/車関係費/フィットネス費/ペット費/教育費/娯楽費/税金/悠真おこづかい/給与/子供手当/その他 から最適なもの"
 }`;
 
 export async function analyzeReceipt(base64Image) {

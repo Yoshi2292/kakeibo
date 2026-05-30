@@ -21,6 +21,7 @@ const SECTIONS = ['auth', 'camera', 'form', 'success'];
   }
 
   buildCategoryOptions();
+  buildUserOptions();
   bindEvents();
   setDefaultDate();
 
@@ -132,6 +133,15 @@ function buildCategoryOptions() {
   Object.keys(CATEGORIES).forEach((cat) => {
     const opt = document.createElement('option');
     opt.value = opt.textContent = cat;
+    sel.appendChild(opt);
+  });
+}
+
+function buildUserOptions() {
+  const sel = $('field-user');
+  USERS.forEach((u) => {
+    const opt = document.createElement('option');
+    opt.value = opt.textContent = u;
     sel.appendChild(opt);
   });
 }
