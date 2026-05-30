@@ -12,7 +12,7 @@ export async function appendRow(fields) {
     fields.user          ?? '',
   ];
 
-  const range = encodeURIComponent(`${CONFIG.SHEET_NAME}!A:F`);
+  const range = encodeURIComponent(`'${CONFIG.SHEET_NAME}'!A:F`);
   const url = [
     `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}`,
     `/values/${range}:append`,
