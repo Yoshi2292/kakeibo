@@ -1,6 +1,6 @@
 import { initAuth, login, isLoggedIn, logout } from './auth.js';
 import { setupCameraInput, setMaxPx, getMaxPx } from './camera.js';
-import { analyzeReceipts, setModel, getModel } from './ocr.js';
+import { analyzeReceipts, setModel, getModel, setPromptMode, getPromptMode } from './ocr.js';
 import { appendRow } from './sheets.js';
 
 // ── State ─────────────────────────────────
@@ -68,6 +68,12 @@ function bindEvents() {
   $('sel-maxpx').addEventListener('change', (e) => {
     setMaxPx(Number(e.target.value));
     localStorage.setItem('ocr-maxpx', e.target.value);
+    updateVersionLabel();
+  });
+
+  $('sel-prompt').addEventListener('change', (e) => {
+    setPromptMode(e.target.value);
+    localStorage.setItem('ocr-prompt', e.target.value);
     updateVersionLabel();
   });
 
@@ -324,18 +330,22 @@ function loadAutoSavePref() {
 }
 
 function loadOcrPrefs() {
-  const model = localStorage.getItem('ocr-model') ?? CONFIG.CLAUDE_MODEL;
-  const px    = Number(localStorage.getItem('ocr-maxpx') ?? 1568);
+  const model  = localStorage.getItem('ocr-model')   ?? CONFIG.CLAUDE_MODEL;
+  const px     = Number(localStorage.getItem('ocr-maxpx')    ?? 800);
+  const prompt = localStorage.getItem('ocr-prompt')  ?? 'standard';
   setModel(model);
   setMaxPx(px);
-  $('sel-model').value = model;
-  $('sel-maxpx').value = String(px);
+  setPromptMode(prompt);
+  $('sel-model').value  = model;
+  $('sel-maxpx').value  = String(px);
+  $('sel-prompt').value = prompt;
   updateVersionLabel();
 }
 
 function updateVersionLabel() {
-  const label = getModel().includes('sonnet') ? 'Sonnet' : 'Haiku';
-  $('app-version').textContent = `${label} / ${getMaxPx()}px`;
+  const modelLabel  = getModel().includes('sonnet') ? 'Sonnet' : 'Haiku';
+  const promptLabel = getPromptMode() === 'strict' ? '厳密' : '標準';
+  $('app-version').textContent = `${modelLabel} / ${getMaxPx()}px / ${promptLabel}`;
 }
 
 // ── Toast ─────────────────────────────────
