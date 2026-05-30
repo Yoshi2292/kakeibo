@@ -15,7 +15,8 @@ const SECTIONS = ['auth', 'camera', 'form', 'success'];
   try {
     await initAuth();
   } catch (e) {
-    showToast('Google 認証の初期化に失敗しました', 'error');
+    console.error('[kakeibo] initAuth failed:', e);
+    showToast('Google 認証の初期化に失敗: ' + e.message, 'error');
     return;
   }
 

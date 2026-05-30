@@ -36,6 +36,10 @@ jobs:
           sed -i "s|__CLAUDE_PROXY_URL__|${CLAUDE_PROXY_URL}|g" config.js
           sed -i "s|__GOOGLE_CLIENT_ID__|${GOOGLE_CLIENT_ID}|g" config.js
           sed -i "s|__SPREADSHEET_ID__|${SPREADSHEET_ID}|g"     config.js
+          # .gitignore から config.js を除外してデプロイに含める
+          sed -i '/config\.js/d' .gitignore
+          # Jekyll 処理を無効化
+          touch .nojekyll
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
