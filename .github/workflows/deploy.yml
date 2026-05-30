@@ -22,7 +22,6 @@ jobs:
         run: |
           mkdir _deploy
 
-          # アプリファイルをコピー（git管理不要なものは除外）
           rsync -a \
             --exclude='.git' \
             --exclude='.github' \
@@ -32,22 +31,20 @@ jobs:
             --exclude='config.example.js' \
             . _deploy/
 
-          # config.js をシークレットから直接生成（.gitignore の影響なし）
-          cat > _deploy/config.js << JSEOF
-const CONFIG = {
-  CLAUDE_PROXY_URL: '${CLAUDE_PROXY_URL}',
-  GOOGLE_CLIENT_ID: '${GOOGLE_CLIENT_ID}',
-  SPREADSHEET_ID:   '${SPREADSHEET_ID}',
-  SHEET_NAME:       '2025',
-  CLAUDE_MODEL:     'claude-sonnet-4-6',
-};
-const CATEGORIES = {
-  '支出': ['医療費', '食費', '外食費', '車関係費', '日用雑貨', '被服費'],
-  '収入': ['給与', 'その他収入'],
-};
-JSEOF
+          {
+            echo "const CONFIG = {"
+            echo "  CLAUDE_PROXY_URL: '${CLAUDE_PROXY_URL}',"
+            echo "  GOOGLE_CLIENT_ID: '${GOOGLE_CLIENT_ID}',"
+            echo "  SPREADSHEET_ID:   '${SPREADSHEET_ID}',"
+            echo "  SHEET_NAME:       '2025',"
+            echo "  CLAUDE_MODEL:     'claude-sonnet-4-6',"
+            echo "};"
+            echo "const CATEGORIES = {"
+            echo "  '支出': ['医療費', '食費', '外食費', '車関係費', '日用雑貨', '被服費'],"
+            echo "  '収入': ['給与', 'その他収入'],"
+            echo "};"
+          } > _deploy/config.js
 
-          # Jekyll 無効化
           touch _deploy/.nojekyll
 
       - name: Deploy to GitHub Pages
