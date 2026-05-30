@@ -1,4 +1,4 @@
-const MAX_PX = 1568;
+export const MAX_PX = 1568;
 const JPEG_Q = 0.75;
 
 export function setupCameraInput(onReady) {
