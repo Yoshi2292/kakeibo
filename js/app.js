@@ -29,6 +29,7 @@ const SECTIONS = ['auth', 'camera', 'form', 'success'];
   setDefaultDate();
   loadAutoSavePref();
   loadOcrPrefs();
+  setupTestModeToggle();
   bindEvents();
 
   showSection(isLoggedIn() ? 'camera' : 'auth');
@@ -346,6 +347,22 @@ function updateVersionLabel() {
   const modelLabel  = getModel().includes('sonnet') ? 'Sonnet' : 'Haiku';
   const promptLabel = getPromptMode() === 'strict' ? '厳密' : '標準';
   $('app-version').textContent = `${modelLabel} / ${getMaxPx()}px / ${promptLabel}`;
+}
+
+let _tapCount = 0;
+let _tapTimer = null;
+function setupTestModeToggle() {
+  $('app-version').addEventListener('click', () => {
+    _tapCount++;
+    clearTimeout(_tapTimer);
+    _tapTimer = setTimeout(() => { _tapCount = 0; }, 2000);
+    if (_tapCount >= 5) {
+      _tapCount = 0;
+      const settings = document.querySelector('.ocr-settings');
+      const isVisible = settings.classList.toggle('visible');
+      $('app-version').classList.toggle('test-mode', isVisible);
+    }
+  });
 }
 
 // ── Toast ─────────────────────────────────
