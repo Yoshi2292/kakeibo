@@ -134,7 +134,10 @@ function bindEvents() {
   // Form
   $('btn-back-camera').addEventListener('click', () => showSection('camera'));
 
-  $('field-date').addEventListener('change', (e) => applyDateWarning(e.target.value));
+  $('field-date').addEventListener('change', (e) => {
+    applyDateWarning(e.target.value);
+    $('field-date').classList.remove('date-corrected');
+  });
 
   $('field-large-cat').addEventListener('change', (e) => {
     buildMediumOptions(e.target.value);
@@ -257,9 +260,11 @@ function buildUserOptions() {
 
 // ── Form helpers ──────────────────────────
 function fillForm(ocr) {
-  const date = sanitizeDate(ocr.date) ?? todayISO();
+  const original = ocr.date ?? null;
+  const date = sanitizeDate(original) ?? todayISO();
   $('field-date').value = date;
   applyDateWarning(date);
+  $('field-date').classList.toggle('date-corrected', !!original && date !== original);
   if (ocr.large_category) {
     $('field-large-cat').value = ocr.large_category;
     buildMediumOptions(ocr.large_category);
