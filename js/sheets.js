@@ -16,7 +16,9 @@ async function sheetsFetch(token, url, options = {}) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message ?? `Sheets API エラー (${res.status})`);
+    const msg = err.error?.message ?? `Sheets API エラー (${res.status})`;
+    console.error('[kakeibo] sheetsFetch error:', msg, url);
+    throw new Error(msg);
   }
   return res.json();
 }
@@ -24,6 +26,7 @@ async function sheetsFetch(token, url, options = {}) {
 export async function appendRow(fields) {
   const token = await getToken();
   const sheetName = dateToSheetName(fields.date);
+  console.log('[kakeibo] appendRow:', { sheetName, fields });
   const base = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}`;
 
   // B列の現在の行数を取得して次の空き行を特定
