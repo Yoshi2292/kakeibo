@@ -134,6 +134,8 @@ function bindEvents() {
   // Form
   $('btn-back-camera').addEventListener('click', () => showSection('camera'));
 
+  $('field-date').addEventListener('change', (e) => applyDateWarning(e.target.value));
+
   $('field-large-cat').addEventListener('change', (e) => {
     buildMediumOptions(e.target.value);
   });
@@ -255,7 +257,9 @@ function buildUserOptions() {
 
 // ── Form helpers ──────────────────────────
 function fillForm(ocr) {
-  $('field-date').value = ocr.date ?? todayISO();
+  const date = sanitizeDate(ocr.date) ?? todayISO();
+  $('field-date').value = date;
+  applyDateWarning(date);
   if (ocr.large_category) {
     $('field-large-cat').value = ocr.large_category;
     buildMediumOptions(ocr.large_category);
@@ -263,6 +267,37 @@ function fillForm(ocr) {
   if (ocr.medium_category) $('field-medium-cat').value = ocr.medium_category;
   $('field-store').value  = ocr.store  ?? '';
   $('field-amount').value = ocr.amount ?? '';
+}
+
+// 年がずれている場合に現在年で補正（6ヶ月以内に収まるなら）
+function sanitizeDate(dateStr) {
+  if (!dateStr) return dateStr;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const now = new Date();
+  const diffMonths = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+  if (Math.abs(diffMonths) <= 6) return dateStr; // 問題なし
+  // 現在年に置き換えて6ヶ月以内に収まるか試みる
+  for (const yr of [now.getFullYear(), now.getFullYear() - 1]) {
+    const candidate = new Date(d);
+    candidate.setFullYear(yr);
+    const diff = (now.getFullYear() - candidate.getFullYear()) * 12 + (now.getMonth() - candidate.getMonth());
+    if (Math.abs(diff) <= 6) {
+      console.log(`[kakeibo] 日付を自動補正: ${dateStr} → ${candidate.toISOString().slice(0, 10)}`);
+      return candidate.toISOString().slice(0, 10);
+    }
+  }
+  return dateStr; // 補正できない場合はそのまま（赤字で警告）
+}
+
+// 2ヶ月以上前 or 未来の日付なら赤色警告
+function applyDateWarning(dateStr) {
+  const el = $('field-date');
+  if (!dateStr) { el.classList.remove('date-warning'); return; }
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffDays = (now - d) / (1000 * 60 * 60 * 24);
+  el.classList.toggle('date-warning', diffDays > 60 || diffDays < -1);
 }
 
 function readForm() {

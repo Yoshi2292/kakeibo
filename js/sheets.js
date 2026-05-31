@@ -28,13 +28,12 @@ export async function appendRow(fields) {
   const sheetName = dateToSheetName(fields.date);
   console.log('[kakeibo] appendRow:', { sheetName, fields });
 
-  // 日付が現在から1年以上ずれている場合はエラー
   if (fields.date) {
     const d = new Date(fields.date);
     const now = new Date();
     const diffMonths = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
-    if (Math.abs(diffMonths) > 12) {
-      throw new Error(`日付 "${fields.date}" が現在と大きくずれています。シートタブ "${sheetName}" を確認してください`);
+    if (Math.abs(diffMonths) > 6) {
+      console.warn(`[kakeibo] 日付が現在から${diffMonths}ヶ月ずれています。シートタブ: ${sheetName}`);
     }
   }
 
