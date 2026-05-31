@@ -27,6 +27,17 @@ export async function appendRow(fields) {
   const token = await getToken();
   const sheetName = dateToSheetName(fields.date);
   console.log('[kakeibo] appendRow:', { sheetName, fields });
+
+  // 日付が現在から1年以上ずれている場合はエラー
+  if (fields.date) {
+    const d = new Date(fields.date);
+    const now = new Date();
+    const diffMonths = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+    if (Math.abs(diffMonths) > 12) {
+      throw new Error(`日付 "${fields.date}" が現在と大きくずれています。シートタブ "${sheetName}" を確認してください`);
+    }
+  }
+
   const base = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}`;
 
   // B列の現在の行数を取得して次の空き行を特定
