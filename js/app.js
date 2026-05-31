@@ -137,6 +137,7 @@ function bindEvents() {
   $('field-date').addEventListener('change', (e) => {
     applyDateWarning(e.target.value);
     $('field-date').classList.remove('date-corrected');
+    $('date-corrected-msg').textContent = '';
   });
 
   $('field-large-cat').addEventListener('change', (e) => {
@@ -265,7 +266,9 @@ function fillForm(ocr) {
   const date = sanitizeDate(original) ?? todayISO();
   $('field-date').value = date;
   applyDateWarning(date);
-  $('field-date').classList.toggle('date-corrected', !!original && date !== original);
+  const corrected = !!original && date !== original;
+  $('field-date').classList.toggle('date-corrected', corrected);
+  $('date-corrected-msg').textContent = corrected ? `日付を自動補正しました（${original} → ${date}）` : '';
   if (ocr.large_category) {
     $('field-large-cat').value = ocr.large_category;
     buildMediumOptions(ocr.large_category);
@@ -275,25 +278,24 @@ function fillForm(ocr) {
   $('field-amount').value = ocr.amount ?? '';
 }
 
-// 年がずれている場合に現在年で補正（6ヶ月以内に収まるなら）
+// 年がずれている場合に現在年で補正（過去6ヶ月以内に収まる場合のみ）
 function sanitizeDate(dateStr) {
   if (!dateStr) return dateStr;
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   const now = new Date();
-  const diffMonths = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
-  if (Math.abs(diffMonths) <= 6) return dateStr; // 問題なし
-  // 現在年に置き換えて6ヶ月以内に収まるか試みる
+  const diffDays = (now - d) / (1000 * 60 * 60 * 24);
+  if (diffDays >= 0 && diffDays <= 180) return dateStr; // 過去6ヶ月以内なら問題なし
   for (const yr of [now.getFullYear(), now.getFullYear() - 1]) {
     const candidate = new Date(d);
     candidate.setFullYear(yr);
-    const diff = (now.getFullYear() - candidate.getFullYear()) * 12 + (now.getMonth() - candidate.getMonth());
-    if (Math.abs(diff) <= 6) {
+    const days = (now - candidate) / (1000 * 60 * 60 * 24);
+    if (days >= 0 && days <= 180) { // 未来でなく、かつ過去6ヶ月以内
       console.log(`[kakeibo] 日付を自動補正: ${dateStr} → ${candidate.toISOString().slice(0, 10)}`);
       return candidate.toISOString().slice(0, 10);
     }
   }
-  return dateStr; // 補正できない場合はそのまま（赤字で警告）
+  return dateStr;
 }
 
 // 2ヶ月以上前 or 未来の日付なら赤色警告
