@@ -35,18 +35,62 @@ async function ensureSheet(token, sheetName) {
     if (!e.message.includes('Unable to parse range') && !e.message.includes('not found')) throw e;
   }
 
-  // シートを新規作成
+  // シートを新規作成（sheetId を取得）
   console.log(`[kakeibo] シート "${sheetName}" を新規作成します`);
-  await sheetsFetch(token, `${BASE()}:batchUpdate`, {
+  const createRes = await sheetsFetch(token, `${BASE()}:batchUpdate`, {
     method: 'POST',
     body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetName } } }] }),
   });
+  const sheetId = createRes.replies[0].addSheet.properties.sheetId;
 
   // ヘッダー行を書き込む
   const headerRange = encodeURIComponent(`'${sheetName}'!B1:H1`);
   await sheetsFetch(token, `${BASE()}/values/${headerRange}?valueInputOption=USER_ENTERED`, {
     method: 'PUT',
     body: JSON.stringify({ values: [['日付', '', '大カテゴリ', '中カテゴリ', '支払先', '金額', '使用者']] }),
+  });
+
+  // 書式を適用（ヘッダー色・交互背景色・フィルター）
+  const HEADER_COLOR  = { red: 0.122, green: 0.380, blue: 0.553 }; // ダークブルー
+  const BAND1_COLOR   = { red: 0.839, green: 0.918, blue: 0.973 }; // ライトブルー
+  const BAND2_COLOR   = { red: 1,     green: 1,     blue: 1     }; // 白
+  const WHITE         = { red: 1,     green: 1,     blue: 1     };
+  const cols          = { startColumnIndex: 1, endColumnIndex: 8 }; // B〜H
+
+  await sheetsFetch(token, `${BASE()}:batchUpdate`, {
+    method: 'POST',
+    body: JSON.stringify({
+      requests: [
+        // ヘッダー行：濃いブルー背景・白太字
+        {
+          repeatCell: {
+            range: { sheetId, startRowIndex: 0, endRowIndex: 1, ...cols },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: HEADER_COLOR,
+                textFormat: { bold: true, foregroundColor: WHITE },
+              },
+            },
+            fields: 'userEnteredFormat(backgroundColor,textFormat)',
+          },
+        },
+        // データ行：1行おきにライトブルー
+        {
+          addBanding: {
+            bandedRange: {
+              range: { sheetId, startRowIndex: 1, ...cols },
+              rowProperties: { firstBandColor: BAND1_COLOR, secondBandColor: BAND2_COLOR },
+            },
+          },
+        },
+        // フィルター（ヘッダー行に▼を付ける）
+        {
+          setBasicFilter: {
+            filter: { range: { sheetId, startRowIndex: 0, ...cols } },
+          },
+        },
+      ],
+    }),
   });
 
   return 2; // ヘッダーが1行目なのでデータは2行目から
