@@ -1,24 +1,13 @@
-const CACHE = 'kakeibo-v2';
+const CACHE = 'kakeibo-v3';
 
-const STATIC = [
-  './',
-  './index.html',
-  './manifest.json',
-  './config.js',
-  './css/style.css',
-  './js/app.js',
-  './js/auth.js',
-  './js/camera.js',
-  './js/ocr.js',
-  './js/sheets.js',
+const STATIC_ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './manifest.json',
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(STATIC))
-  );
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(STATIC_ASSETS)));
   self.skipWaiting();
 });
 
@@ -32,10 +21,23 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // Pass through all cross-origin requests (APIs, Google CDN)
-  if (new URL(e.request.url).origin !== location.origin) return;
+  const url = new URL(e.request.url);
+  if (url.origin !== location.origin) return;
 
-  e.respondWith(
-    caches.match(e.request).then((cached) => cached ?? fetch(e.request))
-  );
+  // アイコン・マニフェストのみキャッシュ優先、JS/CSS/HTMLは常にネットワーク優先
+  const isStaticAsset = /\.(png|ico)$/.test(url.pathname) || url.pathname.endsWith('manifest.json');
+
+  if (isStaticAsset) {
+    e.respondWith(caches.match(e.request).then((c) => c ?? fetch(e.request)));
+  } else {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          const clone = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, clone));
+          return res;
+        })
+        .catch(() => caches.match(e.request))
+    );
+  }
 });
