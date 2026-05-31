@@ -592,6 +592,17 @@ html, body {
   gap: 16px;
 }
 
+.stats-nav .btn-icon {
+  color: var(--c-primary);
+  font-size: 28px;
+  width: 44px;
+  height: 44px;
+}
+
+.stats-nav .btn-icon:active {
+  background: rgba(46,125,50,0.12);
+}
+
 .stats-nav-label {
   font-size: 18px;
   font-weight: 600;

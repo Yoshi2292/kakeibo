@@ -62,7 +62,10 @@ function aggregateByMedium(rows) {
 function renderPie(id, entries) {
   destroyChart(id);
   const canvas = document.getElementById(id);
-  if (!canvas || !entries.length) return;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!entries.length) return;
   const total = entries.reduce((s, [, v]) => s + v, 0);
   _charts[id] = new Chart(canvas, {
     type: 'pie',
