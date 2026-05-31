@@ -186,8 +186,9 @@ async function runAutoSave() {
     for (let i = 0; i < total; i++) {
       updateLoadingText(`${i + 1} / ${total} 件保存中...`);
       try {
-        await appendRow(ocrResults[i]);
-        saved.push(ocrResults[i]);
+        const fields = { ...ocrResults[i], date: sanitizeDate(ocrResults[i].date) ?? ocrResults[i].date };
+        await appendRow(fields);
+        saved.push(fields);
       } catch (e) {
         console.error(`[kakeibo] 保存失敗 ${i + 1}件目:`, e);
         failed.push(i + 1);
