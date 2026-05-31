@@ -14,16 +14,17 @@ export async function appendRow(fields) {
   const token = await getToken();
 
   const row = [
-    fields.date          ?? '',
-    fields.large_category  ?? '',
-    fields.medium_category ?? '',
-    fields.store         ?? '',
-    fields.amount        ?? '',
-    fields.user          ?? '',
+    fields.date             ?? '', // B: 日付
+    '',                            // C: 空白
+    fields.large_category   ?? '', // D: 大カテゴリ
+    fields.medium_category  ?? '', // E: 中カテゴリ
+    fields.store            ?? '', // F: 支払先
+    fields.amount           ?? '', // G: 金額
+    fields.user             ?? '', // H: 使用者
   ];
 
   const sheetName = dateToSheetName(fields.date);
-  const range = encodeURIComponent(`'${sheetName}'`) + '!A:F';
+  const range = encodeURIComponent(`'${sheetName}'`) + '!B:H';
   const url = [
     `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}`,
     `/values/${range}:append`,
