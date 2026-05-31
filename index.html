@@ -40,7 +40,10 @@
         <h1>家計簿</h1>
         <span id="app-version" class="app-version"></span>
       </div>
-      <button id="btn-logout" class="btn-icon" title="設定・ログアウト">⚙</button>
+      <div class="header-actions">
+        <a id="link-sheet" href="#" target="_blank" rel="noopener" class="btn-icon" title="スプレッドシートを開く">📊</a>
+        <button id="btn-logout" class="btn-icon" title="設定・ログアウト">⚙</button>
+      </div>
     </header>
     <div class="camera-container">
       <div id="preview-wrap" class="preview-wrap hidden">
@@ -162,6 +165,7 @@
       <div class="success-icon">✓</div>
       <h2>保存しました</h2>
       <div id="success-summary" class="success-summary"></div>
+      <a id="link-sheet-success" href="#" target="_blank" rel="noopener" class="btn btn-outline btn-large">📊 スプレッドシートで確認</a>
       <button id="btn-next" class="btn btn-primary btn-large">続けて入力</button>
     </div>
   </section>
