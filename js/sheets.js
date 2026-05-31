@@ -23,6 +23,35 @@ async function sheetsFetch(token, url, options = {}) {
   return res.json();
 }
 
+const BASE = () => `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}`;
+
+// シートが存在しなければ作成してヘッダーを書き込む
+async function ensureSheet(token, sheetName) {
+  const colRange = encodeURIComponent(`'${sheetName}'!B:B`);
+  try {
+    const current = await sheetsFetch(token, `${BASE()}/values/${colRange}`);
+    return (current.values?.length ?? 0) + 1; // 次の空き行番号
+  } catch (e) {
+    if (!e.message.includes('Unable to parse range') && !e.message.includes('not found')) throw e;
+  }
+
+  // シートを新規作成
+  console.log(`[kakeibo] シート "${sheetName}" を新規作成します`);
+  await sheetsFetch(token, `${BASE()}:batchUpdate`, {
+    method: 'POST',
+    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetName } } }] }),
+  });
+
+  // ヘッダー行を書き込む
+  const headerRange = encodeURIComponent(`'${sheetName}'!B1:H1`);
+  await sheetsFetch(token, `${BASE()}/values/${headerRange}?valueInputOption=USER_ENTERED`, {
+    method: 'PUT',
+    body: JSON.stringify({ values: [['日付', '', '大カテゴリ', '中カテゴリ', '支払先', '金額', '使用者']] }),
+  });
+
+  return 2; // ヘッダーが1行目なのでデータは2行目から
+}
+
 export async function appendRow(fields) {
   const token = await getToken();
   const sheetName = dateToSheetName(fields.date);
@@ -37,12 +66,7 @@ export async function appendRow(fields) {
     }
   }
 
-  const base = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}`;
-
-  // B列の現在の行数を取得して次の空き行を特定
-  const colRange = encodeURIComponent(`'${sheetName}'!B:B`);
-  const current = await sheetsFetch(token, `${base}/values/${colRange}`);
-  const nextRow = (current.values?.length ?? 0) + 1;
+  const nextRow = await ensureSheet(token, sheetName);
 
   const row = [
     fields.date             ?? '', // B
@@ -54,9 +78,8 @@ export async function appendRow(fields) {
     fields.user             ?? '', // H
   ];
 
-  // 行番号を明示して書き込み（appendではなくPUT）
   const writeRange = encodeURIComponent(`'${sheetName}'!B${nextRow}:H${nextRow}`);
-  return sheetsFetch(token, `${base}/values/${writeRange}?valueInputOption=USER_ENTERED`, {
+  return sheetsFetch(token, `${BASE()}/values/${writeRange}?valueInputOption=USER_ENTERED`, {
     method: 'PUT',
     body: JSON.stringify({ values: [row] }),
   });
