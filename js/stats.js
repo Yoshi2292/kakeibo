@@ -17,20 +17,34 @@ function destroyChart(id) {
 async function fetchMonth(token, year, month) {
   const sheetName = `${year}.${month}`;
   const range = encodeURIComponent(`'${sheetName}'!B:H`);
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/${range}`;
+  // UNFORMATTED_VALUE で数値を生の数値として取得
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/${range}?valueRenderOption=UNFORMATTED_VALUE`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) return [];
   const data = await res.json();
   return parseRows(data.values ?? []);
 }
 
+// ヘッダー行から列インデックスを自動判定
+function detectCols(header) {
+  const largeIdx = header.findIndex(h => String(h).includes('大'));
+  if (largeIdx >= 0) {
+    return { largeIdx, mediumIdx: largeIdx + 1, amountIdx: largeIdx + 3 };
+  }
+  // フォールバック：新規作成シートの構造 (B=日付,C=空,D=大,E=中,F=店,G=金額)
+  return { largeIdx: 2, mediumIdx: 3, amountIdx: 5 };
+}
+
 // 行データをオブジェクトに変換（支出のみ）
 function parseRows(values) {
+  if (values.length === 0) return [];
+  const cols = detectCols(values[0]);
+  console.log('[kakeibo] stats cols:', cols, 'header:', values[0]);
   return values.slice(1)
     .map(row => ({
-      large_category:  row[2] ?? '',
-      medium_category: row[3] ?? '',
-      amount: Number(row[5]) || 0,
+      large_category:  row[cols.largeIdx]  ?? '',
+      medium_category: row[cols.mediumIdx] ?? '',
+      amount: Number(row[cols.amountIdx])  || 0,
     }))
     .filter(r => r.large_category === '支出' && r.amount > 0);
 }
