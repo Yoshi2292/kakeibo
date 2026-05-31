@@ -300,9 +300,15 @@ html, body {
 }
 
 .date-corrected {
-  border-color: #2e7d32 !important;
-  color: #2e7d32;
-  background-color: #f1f8f1;
+  border-color: #1565c0 !important;
+  color: #1565c0;
+  background-color: #f0f4ff;
+}
+
+.date-corrected-msg {
+  font-size: 11px;
+  color: #1565c0;
+  margin-top: 3px;
 }
 
 .form-group select {
