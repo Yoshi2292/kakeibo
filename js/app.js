@@ -30,6 +30,7 @@ const SECTIONS = ['auth', 'camera', 'form', 'success'];
   loadAutoSavePref();
   loadOcrPrefs();
   setupTestModeToggle();
+  setupSheetLinks();
   bindEvents();
 
   showSection(isLoggedIn() ? 'camera' : 'auth');
@@ -390,6 +391,12 @@ function updateVersionLabel() {
   const modelLabel  = getModel().includes('sonnet') ? 'Sonnet' : 'Haiku';
   const promptLabel = getPromptMode() === 'strict' ? '厳密' : '標準';
   $('app-version').textContent = `${CONFIG.BUILD_TIME} | ${modelLabel} / ${getMaxPx()}px / ${promptLabel}`;
+}
+
+function setupSheetLinks() {
+  const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SPREADSHEET_ID}/edit`;
+  $('link-sheet').href = url;
+  $('link-sheet-success').href = url;
 }
 
 let _tapCount = 0;

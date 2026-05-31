@@ -82,6 +82,12 @@ html, body {
   user-select: none;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .app-version.test-mode {
   opacity: 1;
   color: #ffe082;
