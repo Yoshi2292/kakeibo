@@ -293,6 +293,12 @@ html, body {
   border-color: var(--c-secondary);
 }
 
+.date-warning {
+  border-color: #e53935 !important;
+  color: #e53935;
+  background-color: #fff8f8;
+}
+
 .form-group select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath stroke='%23757575' stroke-width='1.5' fill='none' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
