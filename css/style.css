@@ -550,6 +550,78 @@ html, body {
 }
 
 /* =====================
+   Stats
+   ===================== */
+.stats-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--c-border);
+  flex-shrink: 0;
+}
+
+.stats-tab {
+  flex: 1;
+  padding: 12px;
+  background: none;
+  border: none;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--c-text-sub);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+}
+
+.stats-tab.active {
+  color: var(--c-primary);
+  border-bottom-color: var(--c-primary);
+}
+
+.stats-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stats-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.stats-nav-label {
+  font-size: 18px;
+  font-weight: 600;
+  min-width: 120px;
+  text-align: center;
+}
+
+.stats-total {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--c-primary);
+  margin: 0;
+}
+
+.stats-section-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-text-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.chart-wrap {
+  position: relative;
+  width: 100%;
+}
+
+/* =====================
    Utility
    ===================== */
 .hidden { display: none !important; }

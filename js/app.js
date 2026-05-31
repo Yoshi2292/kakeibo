@@ -2,6 +2,7 @@ import { initAuth, login, isLoggedIn, logout } from './auth.js';
 import { setupCameraInput, setMaxPx, getMaxPx } from './camera.js';
 import { analyzeReceipts, setModel, getModel, setPromptMode, getPromptMode } from './ocr.js';
 import { appendRow } from './sheets.js';
+import { loadMonthlyStats, loadYearlyStats } from './stats.js';
 
 // ── State ─────────────────────────────────
 let capturedImages = []; // [{dataUrl, base64}, ...]
@@ -12,7 +13,12 @@ let autoSave      = false;
 
 // ── DOM ───────────────────────────────────
 const $ = (id) => document.getElementById(id);
-const SECTIONS = ['auth', 'camera', 'form', 'success'];
+const SECTIONS = ['auth', 'camera', 'form', 'success', 'stats'];
+
+// ── Stats state ───────────────────────────
+let statsTab = 'monthly';
+let statsYear = new Date().getFullYear();
+let statsMonth = new Date().getMonth() + 1;
 
 // ── Boot ──────────────────────────────────
 (async () => {
@@ -42,6 +48,34 @@ const SECTIONS = ['auth', 'camera', 'form', 'success'];
 
 // ── Events ────────────────────────────────
 function bindEvents() {
+  // Stats
+  $('btn-stats').addEventListener('click', () => {
+    showSection('stats');
+    refreshStats();
+  });
+  $('btn-back-stats').addEventListener('click', () => showSection('camera'));
+
+  document.querySelectorAll('.stats-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      statsTab = btn.dataset.tab;
+      document.querySelectorAll('.stats-tab').forEach(b => b.classList.toggle('active', b === btn));
+      $('stats-panel-monthly').classList.toggle('hidden', statsTab !== 'monthly');
+      $('stats-panel-yearly').classList.toggle('hidden', statsTab !== 'yearly');
+      refreshStats();
+    });
+  });
+
+  $('stats-prev-month').addEventListener('click', () => {
+    statsMonth--; if (statsMonth < 1) { statsMonth = 12; statsYear--; }
+    refreshStats();
+  });
+  $('stats-next-month').addEventListener('click', () => {
+    statsMonth++; if (statsMonth > 12) { statsMonth = 1; statsYear++; }
+    refreshStats();
+  });
+  $('stats-prev-year').addEventListener('click', () => { statsYear--; refreshStats(); });
+  $('stats-next-year').addEventListener('click', () => { statsYear++; refreshStats(); });
+
   // Auth
   $('btn-login').addEventListener('click', async () => {
     try { await login(); showSection('camera'); }
@@ -391,6 +425,23 @@ function updateVersionLabel() {
   const modelLabel  = getModel().includes('sonnet') ? 'Sonnet' : 'Haiku';
   const promptLabel = getPromptMode() === 'strict' ? '厳密' : '標準';
   $('app-version').textContent = `${CONFIG.BUILD_TIME} | ${modelLabel} / ${getMaxPx()}px / ${promptLabel}`;
+}
+
+async function refreshStats() {
+  $('loading-stats').classList.remove('hidden');
+  try {
+    if (statsTab === 'monthly') {
+      $('stats-month-label').textContent = `${statsYear}年 ${statsMonth}月`;
+      await loadMonthlyStats(statsYear, statsMonth);
+    } else {
+      $('stats-year-label').textContent = `${statsYear}年`;
+      await loadYearlyStats(statsYear);
+    }
+  } catch (e) {
+    showToast('集計エラー: ' + e.message, 'error');
+  } finally {
+    $('loading-stats').classList.add('hidden');
+  }
 }
 
 function setupSheetLinks() {

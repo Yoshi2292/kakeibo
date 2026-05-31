@@ -41,6 +41,7 @@
         <span id="app-version" class="app-version"></span>
       </div>
       <div class="header-actions">
+        <button id="btn-stats" class="btn-icon" title="集計">📈</button>
         <a id="link-sheet" href="#" target="_blank" rel="noopener" class="btn-icon" title="スプレッドシートを開く">📊</a>
         <button id="btn-logout" class="btn-icon" title="設定・ログアウト">⚙</button>
       </div>
@@ -159,6 +160,49 @@
     </div>
   </section>
 
+  <!-- ===== Stats ===== -->
+  <section id="section-stats" class="section">
+    <header class="app-header">
+      <button id="btn-back-stats" class="btn-icon" aria-label="戻る">←</button>
+      <h1>集計</h1>
+      <span></span>
+    </header>
+    <div class="stats-tabs">
+      <button class="stats-tab active" data-tab="monthly">月次</button>
+      <button class="stats-tab" data-tab="yearly">年次</button>
+    </div>
+
+    <!-- 月次 -->
+    <div id="stats-panel-monthly" class="stats-panel">
+      <div class="stats-nav">
+        <button id="stats-prev-month" class="btn-icon">‹</button>
+        <span id="stats-month-label" class="stats-nav-label"></span>
+        <button id="stats-next-month" class="btn-icon">›</button>
+      </div>
+      <p id="stats-monthly-total" class="stats-total"></p>
+      <div class="chart-wrap"><canvas id="chart-monthly-pie"></canvas></div>
+    </div>
+
+    <!-- 年次 -->
+    <div id="stats-panel-yearly" class="stats-panel hidden">
+      <div class="stats-nav">
+        <button id="stats-prev-year" class="btn-icon">‹</button>
+        <span id="stats-year-label" class="stats-nav-label"></span>
+        <button id="stats-next-year" class="btn-icon">›</button>
+      </div>
+      <p id="stats-yearly-total" class="stats-total"></p>
+      <p class="stats-section-label">月別支出推移</p>
+      <div class="chart-wrap"><canvas id="chart-yearly-bar"></canvas></div>
+      <p class="stats-section-label">年間カテゴリ別</p>
+      <div class="chart-wrap"><canvas id="chart-yearly-pie"></canvas></div>
+    </div>
+
+    <div id="loading-stats" class="loading-overlay hidden">
+      <div class="spinner"></div>
+      <p>集計中...</p>
+    </div>
+  </section>
+
   <!-- ===== Success ===== -->
   <section id="section-success" class="section">
     <div class="success-container">
@@ -175,6 +219,7 @@
 <div id="toast" role="alert" aria-live="polite"></div>
 
 <script src="https://accounts.google.com/gsi/client" async></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="config.js"></script>
 <script type="module" src="js/app.js"></script>
 </body>
