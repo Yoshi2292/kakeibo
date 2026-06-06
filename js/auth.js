@@ -37,7 +37,7 @@ export function login() {
       _storeToken(res);
       resolve();
     };
-    tokenClient.requestAccessToken({ prompt: 'consent' });
+    tokenClient.requestAccessToken({ prompt: 'select_account' });
   });
 }
 
