@@ -25,12 +25,30 @@ async function sheetsFetch(token, url, options = {}) {
 
 const BASE = () => `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}`;
 
-// シートが存在しなければ作成してヘッダーを書き込む
+const HEADER_ROW = ['日付', '', '大カテゴリ', '中カテゴリ', '支払先', '金額', '使用者'];
+
+// シートが存在しなければ作成してヘッダーを書き込む。既存シートはヘッダーを確認・修正する。
 async function ensureSheet(token, sheetName) {
-  const colRange = encodeURIComponent(`'${sheetName}'!B:B`);
+  const colRange    = encodeURIComponent(`'${sheetName}'!B:B`);
+  const headerRange = encodeURIComponent(`'${sheetName}'!B1:H1`);
   try {
-    const current = await sheetsFetch(token, `${BASE()}/values/${colRange}`);
-    return (current.values?.length ?? 0) + 1; // 次の空き行番号
+    const [colRes, headerRes] = await Promise.all([
+      sheetsFetch(token, `${BASE()}/values/${colRange}`),
+      sheetsFetch(token, `${BASE()}/values/${headerRange}`),
+    ]);
+    const nextRow = (colRes.values?.length ?? 0) + 1;
+    const header  = headerRes.values?.[0] ?? [];
+
+    // C列（index 1）が空白でない場合はヘッダーが旧形式 → 修正する
+    if (header.length > 0 && header[1] !== '') {
+      console.log(`[kakeibo] シート "${sheetName}" のヘッダーを修正します`);
+      await sheetsFetch(token, `${BASE()}/values/${headerRange}?valueInputOption=USER_ENTERED`, {
+        method: 'PUT',
+        body: JSON.stringify({ values: [HEADER_ROW] }),
+      });
+    }
+
+    return nextRow;
   } catch (e) {
     if (!e.message.includes('Unable to parse range') && !e.message.includes('not found')) throw e;
   }
@@ -44,10 +62,9 @@ async function ensureSheet(token, sheetName) {
   const sheetId = createRes.replies[0].addSheet.properties.sheetId;
 
   // ヘッダー行を書き込む
-  const headerRange = encodeURIComponent(`'${sheetName}'!B1:H1`);
   await sheetsFetch(token, `${BASE()}/values/${headerRange}?valueInputOption=USER_ENTERED`, {
     method: 'PUT',
-    body: JSON.stringify({ values: [['日付', '', '大カテゴリ', '中カテゴリ', '支払先', '金額', '使用者']] }),
+    body: JSON.stringify({ values: [HEADER_ROW] }),
   });
 
   // 書式を適用（ヘッダー色・交互背景色・フィルター）

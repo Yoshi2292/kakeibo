@@ -424,7 +424,9 @@ function loadOcrPrefs() {
 function updateVersionLabel() {
   const modelLabel  = getModel().includes('sonnet') ? 'Sonnet' : 'Haiku';
   const promptLabel = getPromptMode() === 'strict' ? '厳密' : '標準';
-  $('app-version').textContent = `${CONFIG.BUILD_TIME} | ${modelLabel} / ${getMaxPx()}px / ${promptLabel}`;
+  const label = `${CONFIG.BUILD_TIME} | ${modelLabel} / ${getMaxPx()}px / ${promptLabel}`;
+  $('app-version').textContent = label;
+  $('app-version-auth').textContent = label;
 }
 
 async function refreshStats() {
