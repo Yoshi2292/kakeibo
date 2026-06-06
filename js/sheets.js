@@ -27,7 +27,10 @@ const BASE = () => `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREA
 
 const HEADER_ROW = ['日付', '', '大カテゴリ', '中カテゴリ', '支払先', '金額', '使用者'];
 
-// シートが存在しなければ作成してヘッダーを書き込む。既存シートはヘッダーを確認・修正する。
+// シートが存在しなければ作成してヘッダーを書き込む。
+// 戻り値: { nextRow, hasGapCol }
+//   hasGapCol=true  → 新形式（B=日付, C=空白, D=大カテゴリ … H=使用者）
+//   hasGapCol=false → 旧形式（B=日付, C=大カテゴリ … G=使用者）
 async function ensureSheet(token, sheetName) {
   const colRange    = encodeURIComponent(`'${sheetName}'!B:B`);
   const headerRange = encodeURIComponent(`'${sheetName}'!B1:H1`);
@@ -36,19 +39,12 @@ async function ensureSheet(token, sheetName) {
       sheetsFetch(token, `${BASE()}/values/${colRange}`),
       sheetsFetch(token, `${BASE()}/values/${headerRange}`),
     ]);
-    const nextRow = (colRes.values?.length ?? 0) + 1;
-    const header  = headerRes.values?.[0] ?? [];
-
-    // C列（index 1）が空白でない場合はヘッダーが旧形式 → 修正する
-    if (header.length > 0 && header[1] !== '') {
-      console.log(`[kakeibo] シート "${sheetName}" のヘッダーを修正します`);
-      await sheetsFetch(token, `${BASE()}/values/${headerRange}?valueInputOption=USER_ENTERED`, {
-        method: 'PUT',
-        body: JSON.stringify({ values: [HEADER_ROW] }),
-      });
-    }
-
-    return nextRow;
+    const nextRow  = (colRes.values?.length ?? 0) + 1;
+    const header   = headerRes.values?.[0] ?? [];
+    // ヘッダー2列目（C1）が空文字 → 新形式
+    const hasGapCol = header.length >= 2 && header[1] === '';
+    console.log(`[kakeibo] シート "${sheetName}" フォーマット: ${hasGapCol ? '新形式' : '旧形式'}, nextRow: ${nextRow}`);
+    return { nextRow, hasGapCol };
   } catch (e) {
     if (!e.message.includes('Unable to parse range') && !e.message.includes('not found')) throw e;
   }
@@ -61,7 +57,7 @@ async function ensureSheet(token, sheetName) {
   });
   const sheetId = createRes.replies[0].addSheet.properties.sheetId;
 
-  // ヘッダー行を書き込む
+  // ヘッダー行を書き込む（新形式）
   await sheetsFetch(token, `${BASE()}/values/${headerRange}?valueInputOption=USER_ENTERED`, {
     method: 'PUT',
     body: JSON.stringify({ values: [HEADER_ROW] }),
@@ -110,7 +106,7 @@ async function ensureSheet(token, sheetName) {
     }),
   });
 
-  return 2; // ヘッダーが1行目なのでデータは2行目から
+  return { nextRow: 2, hasGapCol: true }; // ヘッダーが1行目なのでデータは2行目から
 }
 
 export async function appendRow(fields) {
@@ -127,19 +123,15 @@ export async function appendRow(fields) {
     }
   }
 
-  const nextRow = await ensureSheet(token, sheetName);
+  const { nextRow, hasGapCol } = await ensureSheet(token, sheetName);
 
-  const row = [
-    fields.date             ?? '', // B
-    '',                            // C（空白）
-    fields.large_category   ?? '', // D
-    fields.medium_category  ?? '', // E
-    fields.store            ?? '', // F
-    fields.amount           ?? '', // G
-    fields.user             ?? '', // H
-  ];
+  // シートのフォーマットに合わせてデータを書き込む
+  const row = hasGapCol
+    ? [fields.date ?? '', '',  fields.large_category ?? '', fields.medium_category ?? '', fields.store ?? '', fields.amount ?? '', fields.user ?? ''] // B:H
+    : [fields.date ?? '',     fields.large_category ?? '', fields.medium_category ?? '', fields.store ?? '', fields.amount ?? '', fields.user ?? '']; // B:G
+  const endCol = hasGapCol ? 'H' : 'G';
 
-  const writeRange = encodeURIComponent(`'${sheetName}'!B${nextRow}:H${nextRow}`);
+  const writeRange = encodeURIComponent(`'${sheetName}'!B${nextRow}:${endCol}${nextRow}`);
   return sheetsFetch(token, `${BASE()}/values/${writeRange}?valueInputOption=USER_ENTERED`, {
     method: 'PUT',
     body: JSON.stringify({ values: [row] }),
