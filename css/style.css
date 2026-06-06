@@ -93,6 +93,12 @@ html, body {
   color: #ffe082;
 }
 
+.app-version-auth {
+  margin-top: 12px;
+  opacity: 0.6;
+  color: rgba(255,255,255,0.8);
+}
+
 .btn-icon {
   background: none;
   border: none;
