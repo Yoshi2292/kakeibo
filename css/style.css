@@ -738,6 +738,27 @@ html, body {
   margin-top: 4px;
 }
 
+.assets-month-nav-bar {
+  padding: 10px 16px 4px;
+  flex-shrink: 0;
+}
+
+.cf-readonly-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--c-text-sub);
+  min-width: 140px;
+  text-align: right;
+}
+
+.cf-auto-row {
+  background: var(--c-bg);
+}
+
+.assets-total-row.cf-negative {
+  background: var(--c-error);
+}
+
 .assets-empty {
   text-align: center;
   color: var(--c-text-sub);

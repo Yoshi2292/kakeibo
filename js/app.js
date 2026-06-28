@@ -4,6 +4,7 @@ import { analyzeReceipts, setModel, getModel, setPromptMode, getPromptMode } fro
 import { appendRow } from './sheets.js';
 import { loadMonthlyStats, loadYearlyStats } from './stats.js';
 import { loadMonthAssets, saveMonthAssets, loadAssetChart } from './assets.js';
+import { loadCashflow, saveCashflow } from './cashflow.js';
 
 // ── State ─────────────────────────────────
 let capturedImages = []; // [{dataUrl, base64}, ...]
@@ -57,6 +58,7 @@ function bindEvents() {
   // Assets
   $('btn-assets').addEventListener('click', () => {
     showSection('assets');
+    updateAssetsMonthLabel();
     refreshAssetsInput();
   });
   $('btn-back-assets').addEventListener('click', () => showSection('camera'));
@@ -66,31 +68,55 @@ function bindEvents() {
       assetsTab = btn.dataset.tab;
       document.querySelectorAll('.assets-tab').forEach(b => b.classList.toggle('active', b === btn));
       $('assets-panel-input').classList.toggle('hidden', assetsTab !== 'input');
+      $('assets-panel-cashflow').classList.toggle('hidden', assetsTab !== 'cashflow');
       $('assets-panel-chart').classList.toggle('hidden', assetsTab !== 'chart');
+      $('assets-month-nav').classList.toggle('hidden', assetsTab === 'chart');
       if (assetsTab === 'chart') refreshAssetsChart();
+      if (assetsTab === 'cashflow') refreshCashflow();
+      if (assetsTab === 'input') refreshAssetsInput();
     });
   });
 
   $('assets-prev-month').addEventListener('click', () => {
     assetsMonth--; if (assetsMonth < 1) { assetsMonth = 12; assetsYear--; }
-    refreshAssetsInput();
+    updateAssetsMonthLabel();
+    if (assetsTab === 'input') refreshAssetsInput();
+    if (assetsTab === 'cashflow') refreshCashflow();
   });
   $('assets-next-month').addEventListener('click', () => {
     assetsMonth++; if (assetsMonth > 12) { assetsMonth = 1; assetsYear++; }
-    refreshAssetsInput();
+    updateAssetsMonthLabel();
+    if (assetsTab === 'input') refreshAssetsInput();
+    if (assetsTab === 'cashflow') refreshCashflow();
   });
 
   $('btn-save-assets').addEventListener('click', async () => {
     const yearMonth = `${assetsYear}-${String(assetsMonth).padStart(2, '0')}`;
     const categories = {};
     [...ASSET_CATEGORIES, ...LIABILITY_CATEGORIES].forEach(cat => {
-      const input = document.getElementById(`asset-input-${CSS.escape(cat)}`);
-      categories[cat] = Number(input?.value) || 0;
+      categories[cat] = Number(document.getElementById(`asset-input-${cat}`)?.value) || 0;
     });
     setAssetsLoading(true, '保存中...');
     try {
       await saveMonthAssets(yearMonth, categories);
       showToast('資産データを保存しました', 'success');
+    } catch (e) {
+      showToast('保存エラー: ' + e.message, 'error');
+    } finally {
+      setAssetsLoading(false);
+    }
+  });
+
+  $('btn-save-cashflow').addEventListener('click', async () => {
+    const yearMonth = `${assetsYear}-${String(assetsMonth).padStart(2, '0')}`;
+    const data = {};
+    [...CASHFLOW_INCOME, ...CASHFLOW_EXPENSE].forEach(cat => {
+      data[cat] = Number(document.getElementById(`cf-input-${cat}`)?.value) || 0;
+    });
+    setAssetsLoading(true, '保存中...');
+    try {
+      await saveCashflow(yearMonth, data);
+      showToast('収支データを保存しました', 'success');
     } catch (e) {
       showToast('保存エラー: ' + e.message, 'error');
     } finally {
@@ -480,9 +506,12 @@ function updateVersionLabel() {
 }
 
 // ── Assets ────────────────────────────────
+function updateAssetsMonthLabel() {
+  $('assets-month-label').textContent = `${assetsYear}年 ${assetsMonth}月`;
+}
+
 async function refreshAssetsInput() {
   const yearMonth = `${assetsYear}-${String(assetsMonth).padStart(2, '0')}`;
-  $('assets-month-label').textContent = `${assetsYear}年 ${assetsMonth}月`;
   setAssetsLoading(true, '読み込み中...');
   try {
     const data = await loadMonthAssets(yearMonth);
@@ -509,19 +538,19 @@ function renderAssetsForm(data) {
   const makeRow = (cat, value) => {
     const row = document.createElement('div');
     row.className = 'assets-row';
-    const safeId = `asset-input-${cat}`;
     row.innerHTML = `
-      <label class="assets-cat-label" for="${safeId}">${cat}</label>
-      <input type="number" id="${safeId}" class="assets-input"
+      <label class="assets-cat-label" for="asset-input-${cat}">${cat}</label>
+      <input type="number" id="asset-input-${cat}" class="assets-input"
         inputmode="numeric" min="0" step="1" placeholder="0"
         value="${value ?? ''}">
     `;
     return row;
   };
 
-  form.appendChild(makeHeader('資産'));
-  ASSET_CATEGORIES.forEach(cat => form.appendChild(makeRow(cat, data[cat])));
-
+  ASSET_GROUPS.forEach(({ group, items }) => {
+    form.appendChild(makeHeader(group));
+    items.forEach(cat => form.appendChild(makeRow(cat, data[cat])));
+  });
   form.appendChild(makeHeader('負債'));
   LIABILITY_CATEGORIES.forEach(cat => form.appendChild(makeRow(cat, data[cat])));
 
@@ -539,6 +568,75 @@ function updateAssetsTotal() {
   $('assets-asset-total').textContent     = `¥${assetTotal.toLocaleString()}`;
   $('assets-liability-total').textContent = `¥${liabilityTotal.toLocaleString()}`;
   $('assets-total').textContent           = `¥${netWorth.toLocaleString()}`;
+}
+
+// ── Cashflow ──────────────────────────────
+async function refreshCashflow() {
+  const yearMonth = `${assetsYear}-${String(assetsMonth).padStart(2, '0')}`;
+  setAssetsLoading(true, '読み込み中...');
+  try {
+    const { manual, kakeiboTotal } = await loadCashflow(yearMonth);
+    renderCashflowForm(manual, kakeiboTotal);
+  } catch (e) {
+    showToast('収支データの読み込みエラー: ' + e.message, 'error');
+    renderCashflowForm({}, 0);
+  } finally {
+    setAssetsLoading(false);
+  }
+}
+
+function renderCashflowForm(manual, kakeiboTotal) {
+  const form = $('cashflow-form');
+  form.innerHTML = '';
+
+  const makeHeader = (label) => {
+    const h = document.createElement('div');
+    h.className = 'assets-group-header';
+    h.textContent = label;
+    return h;
+  };
+
+  const makeRow = (cat, value) => {
+    const row = document.createElement('div');
+    row.className = 'assets-row';
+    row.innerHTML = `
+      <label class="assets-cat-label" for="cf-input-${cat}">${cat}</label>
+      <input type="number" id="cf-input-${cat}" class="assets-input cf-input"
+        inputmode="numeric" min="0" step="1" placeholder="0"
+        value="${value ?? ''}">
+    `;
+    return row;
+  };
+
+  form.appendChild(makeHeader('収入'));
+  CASHFLOW_INCOME.forEach(cat => form.appendChild(makeRow(cat, manual[cat])));
+
+  form.appendChild(makeHeader('支出'));
+  const autoRow = document.createElement('div');
+  autoRow.className = 'assets-row cf-auto-row';
+  autoRow.innerHTML = `
+    <span class="assets-cat-label">家計（家計簿より）</span>
+    <span class="cf-readonly-value">¥${kakeiboTotal.toLocaleString()}</span>
+  `;
+  form.appendChild(autoRow);
+  CASHFLOW_EXPENSE.forEach(cat => form.appendChild(makeRow(cat, manual[cat])));
+
+  form.querySelectorAll('.cf-input').forEach(input => {
+    input.addEventListener('input', () => updateCashflowTotals(kakeiboTotal));
+  });
+  updateCashflowTotals(kakeiboTotal);
+}
+
+function updateCashflowTotals(kakeiboTotal) {
+  const getVal = (cat) => Number(document.getElementById(`cf-input-${cat}`)?.value) || 0;
+  const incomeTotal    = CASHFLOW_INCOME.reduce((s, c) => s + getVal(c), 0);
+  const expenseManual  = CASHFLOW_EXPENSE.reduce((s, c) => s + getVal(c), 0);
+  const expenseTotal   = kakeiboTotal + expenseManual;
+  const balance        = incomeTotal - expenseTotal;
+  $('cf-income-total').textContent  = `¥${incomeTotal.toLocaleString()}`;
+  $('cf-expense-total').textContent = `¥${expenseTotal.toLocaleString()}`;
+  $('cf-balance').textContent       = `${balance >= 0 ? '+' : ''}¥${balance.toLocaleString()}`;
+  $('cf-balance-row').classList.toggle('cf-negative', balance < 0);
 }
 
 async function refreshAssetsChart() {
