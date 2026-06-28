@@ -686,6 +686,37 @@ html, body {
   background: var(--c-surface);
 }
 
+.assets-group-header {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-text-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 8px 4px 2px;
+}
+
+.assets-subtotals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.assets-subtotal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--c-bg);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--c-text-sub);
+}
+
+.assets-subtotal-liability {
+  color: var(--c-error);
+}
+
 .assets-total-row {
   display: flex;
   align-items: center;

@@ -123,7 +123,7 @@ export async function saveMonthAssets(yearMonth, categories) {
   }
 }
 
-// 総資産推移グラフを描画
+// 純資産推移グラフを描画（資産積み上げ＋負債マイナス＋純資産ライン）
 export async function loadAssetChart() {
   const token = await getToken();
   const all = await fetchAllAssets(token);
@@ -135,52 +135,62 @@ export async function loadAssetChart() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const sortedMonths = Object.keys(all).sort();
+  const emptyEl = document.getElementById('assets-chart-empty');
+
   if (!sortedMonths.length) {
-    document.getElementById('assets-chart-empty').classList.remove('hidden');
+    if (emptyEl) emptyEl.classList.remove('hidden');
     return;
   }
-  document.getElementById('assets-chart-empty').classList.add('hidden');
-
-  // カテゴリ一覧（全期間のユニオン）
-  const allCats = [...new Set(sortedMonths.flatMap(ym => Object.keys(all[ym])))];
+  if (emptyEl) emptyEl.classList.add('hidden');
 
   const labels = sortedMonths.map(ym => {
     const [y, m] = ym.split('-');
     return `${y}/${m}`;
   });
 
-  // 合計ラインのデータセット
-  const totalData = sortedMonths.map(ym =>
-    Object.values(all[ym]).reduce((s, v) => s + v, 0)
-  );
+  const ASSET_PALETTE  = ['#4e79a7','#f28e2b','#59a14f','#76b7b2','#edc948','#b07aa1'];
+  const LIAB_PALETTE   = ['#e15759','#ff9da7'];
 
-  // カテゴリ別積み上げデータセット
-  const catDatasets = allCats.map((cat, i) => ({
+  // 資産カテゴリ（正の積み上げ棒）
+  const assetDatasets = ASSET_CATEGORIES.map((cat, i) => ({
     label: cat,
-    data: sortedMonths.map(ym => all[ym][cat] ?? 0),
-    backgroundColor: PALETTE[i % PALETTE.length] + '99',
-    borderColor: PALETTE[i % PALETTE.length],
+    data: sortedMonths.map(ym => all[ym]?.[cat] ?? 0),
+    backgroundColor: ASSET_PALETTE[i % ASSET_PALETTE.length] + 'bb',
+    borderColor:     ASSET_PALETTE[i % ASSET_PALETTE.length],
     borderWidth: 1,
-    fill: true,
-    stack: 'cats',
+    stack: 'assets',
   }));
 
-  const totalDataset = {
-    label: '総資産',
-    data: totalData,
+  // 負債カテゴリ（負の積み上げ棒）
+  const liabilityDatasets = LIABILITY_CATEGORIES.map((cat, i) => ({
+    label: cat + '（負債）',
+    data: sortedMonths.map(ym => -(all[ym]?.[cat] ?? 0)),
+    backgroundColor: LIAB_PALETTE[i % LIAB_PALETTE.length] + 'bb',
+    borderColor:     LIAB_PALETTE[i % LIAB_PALETTE.length],
+    borderWidth: 1,
+    stack: 'liabilities',
+  }));
+
+  // 純資産ライン
+  const netWorthDataset = {
+    label: '純資産',
+    type: 'line',
+    data: sortedMonths.map(ym => {
+      const a = ASSET_CATEGORIES.reduce((s, c) => s + (all[ym]?.[c] ?? 0), 0);
+      const l = LIABILITY_CATEGORIES.reduce((s, c) => s + (all[ym]?.[c] ?? 0), 0);
+      return a - l;
+    }),
     borderColor: '#2e7d32',
     backgroundColor: 'transparent',
     borderWidth: 2.5,
     pointRadius: 4,
     pointBackgroundColor: '#2e7d32',
-    type: 'line',
     order: 0,
-    stack: 'total',
   };
 
   _chart = new Chart(ctx, {
     type: 'bar',
-    data: { labels, datasets: [...catDatasets, totalDataset] },
+    data: { labels, datasets: [...assetDatasets, ...liabilityDatasets, netWorthDataset] },
     options: {
       responsive: true,
       interaction: { mode: 'index' },
@@ -188,7 +198,7 @@ export async function loadAssetChart() {
         legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12, padding: 8 } },
         tooltip: {
           callbacks: {
-            label: c => `${c.dataset.label}: ¥${Number(c.raw).toLocaleString()}`,
+            label: c => `${c.dataset.label}: ¥${Math.abs(Number(c.raw)).toLocaleString()}`,
           },
         },
       },
@@ -196,7 +206,7 @@ export async function loadAssetChart() {
         x: { stacked: true },
         y: {
           stacked: true,
-          ticks: { callback: v => v === 0 ? '0' : `¥${(v / 10000).toFixed(0)}万` },
+          ticks: { callback: v => `¥${(v / 10000).toFixed(0)}万` },
         },
       },
     },
