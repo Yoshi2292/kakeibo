@@ -83,8 +83,8 @@ function bindEvents() {
   $('btn-save-assets').addEventListener('click', async () => {
     const yearMonth = `${assetsYear}-${String(assetsMonth).padStart(2, '0')}`;
     const categories = {};
-    ASSET_CATEGORIES.forEach(cat => {
-      const input = document.getElementById(`asset-input-${cat}`);
+    [...ASSET_CATEGORIES, ...LIABILITY_CATEGORIES].forEach(cat => {
+      const input = document.getElementById(`asset-input-${CSS.escape(cat)}`);
       categories[cat] = Number(input?.value) || 0;
     });
     setAssetsLoading(true, '保存中...');
@@ -498,23 +498,33 @@ async function refreshAssetsInput() {
 function renderAssetsForm(data) {
   const form = $('assets-form');
   form.innerHTML = '';
-  ASSET_CATEGORIES.forEach(cat => {
+
+  const makeHeader = (label) => {
+    const h = document.createElement('div');
+    h.className = 'assets-group-header';
+    h.textContent = label;
+    return h;
+  };
+
+  const makeRow = (cat, value) => {
     const row = document.createElement('div');
     row.className = 'assets-row';
+    const safeId = `asset-input-${cat}`;
     row.innerHTML = `
-      <label class="assets-cat-label" for="asset-input-${cat}">${cat}</label>
-      <input
-        type="number"
-        id="asset-input-${cat}"
-        class="assets-input"
-        inputmode="numeric"
-        min="0"
-        step="1"
-        placeholder="0"
-        value="${data[cat] ?? ''}">
+      <label class="assets-cat-label" for="${safeId}">${cat}</label>
+      <input type="number" id="${safeId}" class="assets-input"
+        inputmode="numeric" min="0" step="1" placeholder="0"
+        value="${value ?? ''}">
     `;
-    form.appendChild(row);
-  });
+    return row;
+  };
+
+  form.appendChild(makeHeader('資産'));
+  ASSET_CATEGORIES.forEach(cat => form.appendChild(makeRow(cat, data[cat])));
+
+  form.appendChild(makeHeader('負債'));
+  LIABILITY_CATEGORIES.forEach(cat => form.appendChild(makeRow(cat, data[cat])));
+
   form.querySelectorAll('.assets-input').forEach(input => {
     input.addEventListener('input', updateAssetsTotal);
   });
@@ -522,11 +532,13 @@ function renderAssetsForm(data) {
 }
 
 function updateAssetsTotal() {
-  const total = ASSET_CATEGORIES.reduce((sum, cat) => {
-    const v = Number(document.getElementById(`asset-input-${cat}`)?.value) || 0;
-    return sum + v;
-  }, 0);
-  $('assets-total').textContent = `¥${total.toLocaleString()}`;
+  const getVal = (cat) => Number(document.getElementById(`asset-input-${cat}`)?.value) || 0;
+  const assetTotal     = ASSET_CATEGORIES.reduce((s, c) => s + getVal(c), 0);
+  const liabilityTotal = LIABILITY_CATEGORIES.reduce((s, c) => s + getVal(c), 0);
+  const netWorth       = assetTotal - liabilityTotal;
+  $('assets-asset-total').textContent     = `¥${assetTotal.toLocaleString()}`;
+  $('assets-liability-total').textContent = `¥${liabilityTotal.toLocaleString()}`;
+  $('assets-total').textContent           = `¥${netWorth.toLocaleString()}`;
 }
 
 async function refreshAssetsChart() {

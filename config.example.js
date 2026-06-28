@@ -43,10 +43,14 @@ const CATEGORIES = {
 };
 
 const ASSET_CATEGORIES = [
-  '現金',
-  '銀行預金',
-  '株式・ETF',
-  '投資信託',
-  '保険・年金',
-  'その他',
+  'ゆうちょ銀行',
+  '楽天銀行',
+  '千葉銀行',
+  '三菱UFJ eスマート証券',
+  '楽天証券',
+  '田中貴金属',
+];
+
+const LIABILITY_CATEGORIES = [
+  '自動車ローン残高',
 ];
