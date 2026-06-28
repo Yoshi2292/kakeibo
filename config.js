@@ -11,3 +11,4 @@ const CATEGORIES = {
   '収入': ['給与','子供手当'],
 };
 const USERS = ['パパ','ママ','悠真'];
+const ASSET_CATEGORIES = ['現金','銀行預金','株式・ETF','投資信託','保険・年金','その他'];
