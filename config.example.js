@@ -41,3 +41,12 @@ const CATEGORIES = {
     'その他収入',
   ],
 };
+
+const ASSET_CATEGORIES = [
+  '現金',
+  '銀行預金',
+  '株式・ETF',
+  '投資信託',
+  '保険・年金',
+  'その他',
+];

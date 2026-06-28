@@ -42,6 +42,7 @@
         <span id="app-version" class="app-version"></span>
       </div>
       <div class="header-actions">
+        <button id="btn-assets" class="btn-icon" title="資産管理">💰</button>
         <button id="btn-stats" class="btn-icon" title="集計">📈</button>
         <a id="link-sheet" href="#" target="_blank" rel="noopener" class="btn-icon" title="スプレッドシートを開く">📊</a>
         <button id="btn-logout" class="btn-icon" title="設定・ログアウト">⚙</button>
@@ -201,6 +202,48 @@
     <div id="loading-stats" class="loading-overlay hidden">
       <div class="spinner"></div>
       <p>集計中...</p>
+    </div>
+  </section>
+
+  <!-- ===== Assets ===== -->
+  <section id="section-assets" class="section">
+    <header class="app-header">
+      <button id="btn-back-assets" class="btn-icon" aria-label="戻る">←</button>
+      <h1>資産管理</h1>
+      <span></span>
+    </header>
+    <div class="stats-tabs">
+      <button class="assets-tab active" data-tab="input">月次入力</button>
+      <button class="assets-tab" data-tab="chart">推移グラフ</button>
+    </div>
+
+    <!-- 月次入力 -->
+    <div id="assets-panel-input" class="stats-panel">
+      <div class="stats-nav">
+        <button id="assets-prev-month" class="btn-icon">‹</button>
+        <span id="assets-month-label" class="stats-nav-label"></span>
+        <button id="assets-next-month" class="btn-icon">›</button>
+      </div>
+      <div id="assets-form" class="assets-form"></div>
+      <div class="assets-total-row">
+        <span>合計</span>
+        <span id="assets-total" class="assets-total-value">¥0</span>
+      </div>
+      <div class="assets-actions">
+        <button id="btn-save-assets" class="btn btn-primary btn-large">💾 保存する</button>
+      </div>
+    </div>
+
+    <!-- 推移グラフ -->
+    <div id="assets-panel-chart" class="stats-panel hidden">
+      <p class="stats-section-label">総資産推移（カテゴリ別積み上げ）</p>
+      <div class="chart-wrap"><canvas id="chart-assets-line"></canvas></div>
+      <p id="assets-chart-empty" class="assets-empty hidden">データがありません</p>
+    </div>
+
+    <div id="loading-assets" class="loading-overlay hidden">
+      <div class="spinner"></div>
+      <p id="loading-assets-text">読み込み中...</p>
     </div>
   </section>
 
