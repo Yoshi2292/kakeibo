@@ -3,6 +3,7 @@ import { setupCameraInput, setMaxPx, getMaxPx } from './camera.js';
 import { analyzeReceipts, setModel, getModel, setPromptMode, getPromptMode } from './ocr.js';
 import { appendRow } from './sheets.js';
 import { loadMonthlyStats, loadYearlyStats } from './stats.js';
+import { loadMonthAssets, saveMonthAssets, loadAssetChart } from './assets.js';
 
 // ── State ─────────────────────────────────
 let capturedImages = []; // [{dataUrl, base64}, ...]
@@ -13,12 +14,17 @@ let autoSave      = false;
 
 // ── DOM ───────────────────────────────────
 const $ = (id) => document.getElementById(id);
-const SECTIONS = ['auth', 'camera', 'form', 'success', 'stats'];
+const SECTIONS = ['auth', 'camera', 'form', 'success', 'stats', 'assets'];
 
 // ── Stats state ───────────────────────────
 let statsTab = 'monthly';
 let statsYear = new Date().getFullYear();
 let statsMonth = new Date().getMonth() + 1;
+
+// ── Assets state ──────────────────────────
+let assetsTab = 'input';
+let assetsYear = new Date().getFullYear();
+let assetsMonth = new Date().getMonth() + 1;
 
 // ── Boot ──────────────────────────────────
 (async () => {
@@ -48,6 +54,50 @@ let statsMonth = new Date().getMonth() + 1;
 
 // ── Events ────────────────────────────────
 function bindEvents() {
+  // Assets
+  $('btn-assets').addEventListener('click', () => {
+    showSection('assets');
+    refreshAssetsInput();
+  });
+  $('btn-back-assets').addEventListener('click', () => showSection('camera'));
+
+  document.querySelectorAll('.assets-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      assetsTab = btn.dataset.tab;
+      document.querySelectorAll('.assets-tab').forEach(b => b.classList.toggle('active', b === btn));
+      $('assets-panel-input').classList.toggle('hidden', assetsTab !== 'input');
+      $('assets-panel-chart').classList.toggle('hidden', assetsTab !== 'chart');
+      if (assetsTab === 'chart') refreshAssetsChart();
+    });
+  });
+
+  $('assets-prev-month').addEventListener('click', () => {
+    assetsMonth--; if (assetsMonth < 1) { assetsMonth = 12; assetsYear--; }
+    refreshAssetsInput();
+  });
+  $('assets-next-month').addEventListener('click', () => {
+    assetsMonth++; if (assetsMonth > 12) { assetsMonth = 1; assetsYear++; }
+    refreshAssetsInput();
+  });
+
+  $('btn-save-assets').addEventListener('click', async () => {
+    const yearMonth = `${assetsYear}-${String(assetsMonth).padStart(2, '0')}`;
+    const categories = {};
+    ASSET_CATEGORIES.forEach(cat => {
+      const input = document.getElementById(`asset-input-${cat}`);
+      categories[cat] = Number(input?.value) || 0;
+    });
+    setAssetsLoading(true, '保存中...');
+    try {
+      await saveMonthAssets(yearMonth, categories);
+      showToast('資産データを保存しました', 'success');
+    } catch (e) {
+      showToast('保存エラー: ' + e.message, 'error');
+    } finally {
+      setAssetsLoading(false);
+    }
+  });
+
   // Stats
   $('btn-stats').addEventListener('click', () => {
     showSection('stats');
@@ -427,6 +477,73 @@ function updateVersionLabel() {
   const label = `${CONFIG.BUILD_TIME} | ${modelLabel} / ${getMaxPx()}px / ${promptLabel}`;
   $('app-version').textContent = label;
   $('app-version-auth').textContent = label;
+}
+
+// ── Assets ────────────────────────────────
+async function refreshAssetsInput() {
+  const yearMonth = `${assetsYear}-${String(assetsMonth).padStart(2, '0')}`;
+  $('assets-month-label').textContent = `${assetsYear}年 ${assetsMonth}月`;
+  setAssetsLoading(true, '読み込み中...');
+  try {
+    const data = await loadMonthAssets(yearMonth);
+    renderAssetsForm(data);
+  } catch (e) {
+    showToast('資産データの読み込みエラー: ' + e.message, 'error');
+    renderAssetsForm({});
+  } finally {
+    setAssetsLoading(false);
+  }
+}
+
+function renderAssetsForm(data) {
+  const form = $('assets-form');
+  form.innerHTML = '';
+  ASSET_CATEGORIES.forEach(cat => {
+    const row = document.createElement('div');
+    row.className = 'assets-row';
+    row.innerHTML = `
+      <label class="assets-cat-label" for="asset-input-${cat}">${cat}</label>
+      <input
+        type="number"
+        id="asset-input-${cat}"
+        class="assets-input"
+        inputmode="numeric"
+        min="0"
+        step="1"
+        placeholder="0"
+        value="${data[cat] ?? ''}">
+    `;
+    form.appendChild(row);
+  });
+  form.querySelectorAll('.assets-input').forEach(input => {
+    input.addEventListener('input', updateAssetsTotal);
+  });
+  updateAssetsTotal();
+}
+
+function updateAssetsTotal() {
+  const total = ASSET_CATEGORIES.reduce((sum, cat) => {
+    const v = Number(document.getElementById(`asset-input-${cat}`)?.value) || 0;
+    return sum + v;
+  }, 0);
+  $('assets-total').textContent = `¥${total.toLocaleString()}`;
+}
+
+async function refreshAssetsChart() {
+  setAssetsLoading(true, '読み込み中...');
+  try {
+    await loadAssetChart();
+  } catch (e) {
+    showToast('グラフ読み込みエラー: ' + e.message, 'error');
+  } finally {
+    setAssetsLoading(false);
+  }
+}
+
+function setAssetsLoading(on, text = '読み込み中...') {
+  $('loading-assets').classList.toggle('hidden', !on);
+  $('loading-assets-text').textContent = text;
+  $('btn-save-assets').disabled = on;
 }
 
 async function refreshStats() {
