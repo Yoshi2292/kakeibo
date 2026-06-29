@@ -77,15 +77,23 @@ async function fetchAll(token) {
   return result;
 }
 
-// 特定月の収支データを取得（手動入力 + 家計簿自動取込）
+// 特定月の収支データを取得（手動入力 + 家計簿自動取込 + 前月データ）
 export async function loadCashflow(yearMonth) {
   const token = await getToken();
   const [year, month] = yearMonth.split('-').map(Number);
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear  = month === 1 ? year - 1 : year;
+  const prevYearMonth = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+
   const [all, kakeiboTotal] = await Promise.all([
     fetchAll(token),
     fetchKakeiboTotal(token, year, month),
   ]);
-  return { manual: all[yearMonth] ?? {}, kakeiboTotal };
+  return {
+    manual:     all[yearMonth]     ?? {},
+    prevManual: all[prevYearMonth] ?? {},
+    kakeiboTotal,
+  };
 }
 
 // 収支データを保存（手動入力分のみ）

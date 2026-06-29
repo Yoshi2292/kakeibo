@@ -759,6 +759,48 @@ html, body {
   background: var(--c-error);
 }
 
+.carry-forward-btn {
+  width: 100%;
+  margin: 8px 0 4px;
+  font-size: 15px;
+  border-color: var(--c-primary);
+  color: var(--c-primary);
+}
+
+.cf-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.cf-input-wrap .assets-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.cf-prev-btn {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-bg);
+  color: var(--c-text-sub);
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.cf-prev-btn:not(:disabled):active {
+  background: var(--c-border);
+}
+
+.cf-prev-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .assets-empty {
   text-align: center;
   color: var(--c-text-sub);
