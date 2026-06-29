@@ -54,4 +54,4 @@ const ASSET_CATEGORIES = ASSET_GROUPS.flatMap(g => g.items);
 const LIABILITY_CATEGORIES = ['自動車ローン残高'];
 
 const CASHFLOW_INCOME  = ['会社給与', '会社賞与', 'その他収入'];
-const CASHFLOW_EXPENSE = ['自動車ローン支払い', '株式投資', 'その他支出'];
+const CASHFLOW_EXPENSE = ['自動車ローン支払い', '株式投資', 'アローワンス（父）', 'その他支出'];
