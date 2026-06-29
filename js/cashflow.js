@@ -127,7 +127,7 @@ export async function saveCashflow(yearMonth, categories) {
 
   if (newRows.length) {
     const appendRange = encodeURIComponent(`'${SHEET_NAME}'!A:C`);
-    await sheetsFetch(token, `${BASE()}/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+    await sheetsFetch(token, `${BASE()}/values/${appendRange}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
       method: 'POST',
       body: JSON.stringify({ values: newRows }),
     });

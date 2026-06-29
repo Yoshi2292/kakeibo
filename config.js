@@ -4,7 +4,7 @@ const CONFIG = {
   SPREADSHEET_ID:   '1484LHhhq76lmh3CmWZPNyDMVKrKkNGe44E3XN5zSSlw',
   SHEET_NAME:       '2025',
   CLAUDE_MODEL:     'claude-sonnet-4-6',
-  BUILD_TIME:       '06/30 06:29',
+  BUILD_TIME:       '06/30 06:40',
 };
 const CATEGORIES = {
   '支出': ['食費','日用雑貨','外食費','医療費','被服費','電気代','水道代','交際費','スマホ通信費','スマホローン','都民共済','金・銀・プラチナ積立','プロバイダ料金','車関係費','フィットネス費','ペット費','教育費','娯楽費','税金','悠真おこづかい','その他'],
