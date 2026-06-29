@@ -44,7 +44,7 @@ const CATEGORIES = {
 
 const ASSET_GROUPS = [
   { group: '銀行預金', items: ['ゆうちょ（父）', 'ゆうちょ（悠真）', '楽天銀行', '千葉銀行', '財形貯蓄'] },
-  { group: '保険',     items: ['学資保険', '個人年金'] },
+  { group: '保険',     items: ['東京海上日動終身保険', '個人年金'] },
   { group: '株式資産', items: ['三菱UFJ証券', '楽天証券'] },
   { group: '貴金属資産', items: ['田中貴金属工業'] },
   { group: '年金残高', items: ['確定拠出年金'] },
@@ -53,5 +53,5 @@ const ASSET_CATEGORIES = ASSET_GROUPS.flatMap(g => g.items);
 
 const LIABILITY_CATEGORIES = ['自動車ローン残高'];
 
-const CASHFLOW_INCOME  = ['会社給与', 'その他収入'];
+const CASHFLOW_INCOME  = ['会社給与', '会社賞与', '会社退職金', 'その他収入'];
 const CASHFLOW_EXPENSE = ['自動車ローン支払い', '株式投資', 'その他支出'];
