@@ -52,11 +52,11 @@ jobs:
             echo "  {group:'保険',items:['東京海上日動終身保険','個人年金']},"
             echo "  {group:'株式資産',items:['三菱UFJ証券','楽天証券']},"
             echo "  {group:'貴金属資産',items:['田中貴金属工業']},"
-            echo "  {group:'年金残高',items:['確定拠出年金']},"
+            echo "  {group:'年金残高',items:['確定拠出年金','退職金残高']},"
             echo "];"
             echo "const ASSET_CATEGORIES = ASSET_GROUPS.flatMap(g => g.items);"
             echo "const LIABILITY_CATEGORIES = ['自動車ローン残高'];"
-            echo "const CASHFLOW_INCOME  = ['会社給与','会社賞与','会社退職金','その他収入'];"
+            echo "const CASHFLOW_INCOME  = ['会社給与','会社賞与','その他収入'];"
             echo "const CASHFLOW_EXPENSE = ['自動車ローン支払い','株式投資','その他支出'];"
           } > _deploy/config.js
 
