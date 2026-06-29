@@ -107,6 +107,27 @@ function bindEvents() {
     }
   });
 
+  $('btn-asset-carry-forward').addEventListener('click', async () => {
+    const prevMonth    = assetsMonth === 1 ? 12 : assetsMonth - 1;
+    const prevYear     = assetsMonth === 1 ? assetsYear - 1 : assetsYear;
+    const prevYearMonth = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+    setAssetsLoading(true, '前月データを読み込み中...');
+    try {
+      const prevData = await loadMonthAssets(prevYearMonth);
+      if (!Object.keys(prevData).length) {
+        showToast('前月のデータがありません', 'error');
+        return;
+      }
+      renderAssetsForm(prevData);
+      $('btn-asset-carry-forward').classList.add('hidden');
+      showToast('前月の残高を引き継ぎました');
+    } catch (e) {
+      showToast('前月データの読み込みに失敗: ' + e.message, 'error');
+    } finally {
+      setAssetsLoading(false);
+    }
+  });
+
   $('btn-save-cashflow').addEventListener('click', async () => {
     const yearMonth = `${assetsYear}-${String(assetsMonth).padStart(2, '0')}`;
     const data = {};
@@ -516,9 +537,12 @@ async function refreshAssetsInput() {
   try {
     const data = await loadMonthAssets(yearMonth);
     renderAssetsForm(data);
+    const isEmpty = Object.keys(data).length === 0;
+    $('btn-asset-carry-forward').classList.toggle('hidden', !isEmpty);
   } catch (e) {
     showToast('資産データの読み込みエラー: ' + e.message, 'error');
     renderAssetsForm({});
+    $('btn-asset-carry-forward').classList.remove('hidden');
   } finally {
     setAssetsLoading(false);
   }
@@ -575,17 +599,17 @@ async function refreshCashflow() {
   const yearMonth = `${assetsYear}-${String(assetsMonth).padStart(2, '0')}`;
   setAssetsLoading(true, '読み込み中...');
   try {
-    const { manual, kakeiboTotal } = await loadCashflow(yearMonth);
-    renderCashflowForm(manual, kakeiboTotal);
+    const { manual, kakeiboTotal, prevManual } = await loadCashflow(yearMonth);
+    renderCashflowForm(manual, kakeiboTotal, prevManual);
   } catch (e) {
     showToast('収支データの読み込みエラー: ' + e.message, 'error');
-    renderCashflowForm({}, 0);
+    renderCashflowForm({}, 0, {});
   } finally {
     setAssetsLoading(false);
   }
 }
 
-function renderCashflowForm(manual, kakeiboTotal) {
+function renderCashflowForm(manual, kakeiboTotal, prevManual = {}) {
   const form = $('cashflow-form');
   form.innerHTML = '';
 
@@ -596,20 +620,26 @@ function renderCashflowForm(manual, kakeiboTotal) {
     return h;
   };
 
-  const makeRow = (cat, value) => {
+  const makeRow = (cat, value, prevValue) => {
     const row = document.createElement('div');
     row.className = 'assets-row';
+    const hasPrev = prevValue != null && prevValue !== 0;
+    const prevLabel = hasPrev ? `¥${Number(prevValue).toLocaleString()}` : '前月';
     row.innerHTML = `
       <label class="assets-cat-label" for="cf-input-${cat}">${cat}</label>
-      <input type="number" id="cf-input-${cat}" class="assets-input cf-input"
-        inputmode="numeric" min="0" step="1" placeholder="0"
-        value="${value ?? ''}">
+      <div class="cf-input-wrap">
+        <input type="number" id="cf-input-${cat}" class="assets-input cf-input"
+          inputmode="numeric" min="0" step="1" placeholder="0"
+          value="${value ?? ''}">
+        <button type="button" class="cf-prev-btn" data-value="${prevValue ?? 0}"
+          data-cat="${cat}" ${!hasPrev ? 'disabled' : ''}>${prevLabel}</button>
+      </div>
     `;
     return row;
   };
 
   form.appendChild(makeHeader('収入'));
-  CASHFLOW_INCOME.forEach(cat => form.appendChild(makeRow(cat, manual[cat])));
+  CASHFLOW_INCOME.forEach(cat => form.appendChild(makeRow(cat, manual[cat], prevManual[cat])));
 
   form.appendChild(makeHeader('支出'));
   const autoRow = document.createElement('div');
@@ -619,8 +649,14 @@ function renderCashflowForm(manual, kakeiboTotal) {
     <span class="cf-readonly-value">¥${kakeiboTotal.toLocaleString()}</span>
   `;
   form.appendChild(autoRow);
-  CASHFLOW_EXPENSE.forEach(cat => form.appendChild(makeRow(cat, manual[cat])));
+  CASHFLOW_EXPENSE.forEach(cat => form.appendChild(makeRow(cat, manual[cat], prevManual[cat])));
 
+  form.querySelectorAll('.cf-prev-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById(`cf-input-${btn.dataset.cat}`);
+      if (input) { input.value = btn.dataset.value; updateCashflowTotals(kakeiboTotal); }
+    });
+  });
   form.querySelectorAll('.cf-input').forEach(input => {
     input.addEventListener('input', () => updateCashflowTotals(kakeiboTotal));
   });
