@@ -1,4 +1,4 @@
-const CACHE = 'kakeibo-v3';
+const CACHE = 'kakeibo-v4';
 
 const STATIC_ASSETS = [
   './icons/icon-192.png',
