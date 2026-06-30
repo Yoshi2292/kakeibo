@@ -26,6 +26,7 @@ let statsMonth = new Date().getMonth() + 1;
 let assetsTab = 'input';
 let assetsYear = new Date().getFullYear();
 let assetsMonth = new Date().getMonth() + 1;
+let assetsDirty = false;
 
 // ── Boot ──────────────────────────────────
 (async () => {
@@ -61,10 +62,13 @@ function bindEvents() {
     updateAssetsMonthLabel();
     refreshAssetsInput();
   });
-  $('btn-back-assets').addEventListener('click', () => showSection('camera'));
+  $('btn-back-assets').addEventListener('click', () => {
+    if (confirmLeave()) showSection('camera');
+  });
 
   document.querySelectorAll('.assets-tab').forEach(btn => {
     btn.addEventListener('click', () => {
+      if (!confirmLeave()) return;
       assetsTab = btn.dataset.tab;
       document.querySelectorAll('.assets-tab').forEach(b => b.classList.toggle('active', b === btn));
       $('assets-panel-input').classList.toggle('hidden', assetsTab !== 'input');
@@ -78,12 +82,14 @@ function bindEvents() {
   });
 
   $('assets-prev-month').addEventListener('click', () => {
+    if (!confirmLeave()) return;
     assetsMonth--; if (assetsMonth < 1) { assetsMonth = 12; assetsYear--; }
     updateAssetsMonthLabel();
     if (assetsTab === 'input') refreshAssetsInput();
     if (assetsTab === 'cashflow') refreshCashflow();
   });
   $('assets-next-month').addEventListener('click', () => {
+    if (!confirmLeave()) return;
     assetsMonth++; if (assetsMonth > 12) { assetsMonth = 1; assetsYear++; }
     updateAssetsMonthLabel();
     if (assetsTab === 'input') refreshAssetsInput();
@@ -99,6 +105,7 @@ function bindEvents() {
     setAssetsLoading(true, '保存中...');
     try {
       await saveMonthAssets(yearMonth, categories);
+      clearDirty();
       showToast('資産データを保存しました', 'success');
     } catch (e) {
       showToast('保存エラー: ' + e.message, 'error');
@@ -119,6 +126,7 @@ function bindEvents() {
         return;
       }
       renderAssetsForm(prevData);
+      markDirty();
       $('btn-asset-carry-forward').classList.add('hidden');
       showToast('前月の残高を引き継ぎました');
     } catch (e) {
@@ -137,6 +145,7 @@ function bindEvents() {
     setAssetsLoading(true, '保存中...');
     try {
       await saveCashflow(yearMonth, data);
+      clearDirty();
       showToast('収支データを保存しました', 'success');
     } catch (e) {
       showToast('保存エラー: ' + e.message, 'error');
@@ -526,6 +535,14 @@ function updateVersionLabel() {
   $('app-version-auth').textContent = label;
 }
 
+// ── Assets dirty tracking ─────────────────
+function markDirty()  { assetsDirty = true; }
+function clearDirty() { assetsDirty = false; }
+function confirmLeave() {
+  if (!assetsDirty) return true;
+  return confirm('入力内容が保存されていません。このまま移動しますか？');
+}
+
 // ── Assets ────────────────────────────────
 function updateAssetsMonthLabel() {
   $('assets-month-label').textContent = `${assetsYear}年 ${assetsMonth}月`;
@@ -539,10 +556,12 @@ async function refreshAssetsInput() {
     renderAssetsForm(data);
     const isEmpty = Object.keys(data).length === 0;
     $('btn-asset-carry-forward').classList.toggle('hidden', !isEmpty);
+    clearDirty();
   } catch (e) {
     showToast('資産データの読み込みエラー: ' + e.message, 'error');
     renderAssetsForm({});
     $('btn-asset-carry-forward').classList.remove('hidden');
+    clearDirty();
   } finally {
     setAssetsLoading(false);
   }
@@ -579,7 +598,7 @@ function renderAssetsForm(data) {
   LIABILITY_CATEGORIES.forEach(cat => form.appendChild(makeRow(cat, data[cat])));
 
   form.querySelectorAll('.assets-input').forEach(input => {
-    input.addEventListener('input', updateAssetsTotal);
+    input.addEventListener('input', () => { markDirty(); updateAssetsTotal(); });
   });
   updateAssetsTotal();
 }
@@ -601,9 +620,11 @@ async function refreshCashflow() {
   try {
     const { manual, kakeiboTotal, prevManual } = await loadCashflow(yearMonth);
     renderCashflowForm(manual, kakeiboTotal, prevManual);
+    clearDirty();
   } catch (e) {
     showToast('収支データの読み込みエラー: ' + e.message, 'error');
     renderCashflowForm({}, 0, {});
+    clearDirty();
   } finally {
     setAssetsLoading(false);
   }
@@ -654,11 +675,11 @@ function renderCashflowForm(manual, kakeiboTotal, prevManual = {}) {
   form.querySelectorAll('.cf-prev-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const input = document.getElementById(`cf-input-${btn.dataset.cat}`);
-      if (input) { input.value = btn.dataset.value; updateCashflowTotals(kakeiboTotal); }
+      if (input) { input.value = btn.dataset.value; markDirty(); updateCashflowTotals(kakeiboTotal); }
     });
   });
   form.querySelectorAll('.cf-input').forEach(input => {
-    input.addEventListener('input', () => updateCashflowTotals(kakeiboTotal));
+    input.addEventListener('input', () => { markDirty(); updateCashflowTotals(kakeiboTotal); });
   });
   updateCashflowTotals(kakeiboTotal);
 }
