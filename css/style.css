@@ -641,71 +641,13 @@ html, body {
 /* =====================
    Forecast / Simulation
    ===================== */
-.forecast-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.forecast-controls input {
+.forecast-panel {
   flex: 1;
-  min-width: 120px;
-  padding: 10px 12px;
-  border: 1.5px solid var(--c-border);
-  border-radius: 10px;
-}
-
-.forecast-form {
+  overflow-y: auto;
+  padding: 12px 16px calc(var(--safe-bottom) + 24px);
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.forecast-section {
-  background: var(--c-surface);
-  border-radius: var(--radius);
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.forecast-section-title {
-  margin: 0;
-  font-size: 15px;
-  color: var(--c-primary);
-}
-
-.forecast-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.forecast-label {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.forecast-amounts {
-  display: flex;
-  gap: 8px;
-}
-
-.forecast-input-group {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--c-text-sub);
-}
-
-.forecast-input-group input {
-  padding: 10px 12px;
-  border: 1.5px solid var(--c-border);
-  border-radius: 10px;
 }
 
 .forecast-card {
@@ -717,21 +659,49 @@ html, body {
   gap: 10px;
 }
 
-.forecast-event-form {
-  display: grid;
-  gap: 8px;
+.forecast-section-title {
+  margin: 0;
+  font-size: 15px;
+  color: var(--c-primary);
 }
 
-.forecast-event-form input {
-  padding: 10px 12px;
-  border: 1.5px solid var(--c-border);
-  border-radius: 10px;
-}
-
-.forecast-event-list {
+.forecast-field {
   display: flex;
   flex-direction: column;
+  gap: 4px;
+}
+
+.forecast-field label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c-text-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.forecast-field input,
+.forecast-field select {
+  padding: 12px 14px;
+  border: 1.5px solid var(--c-border);
+  border-radius: 10px;
+  font-size: 16px;
+  background: var(--c-surface);
+  color: var(--c-text);
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+}
+
+.forecast-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.forecast-rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .forecast-event-card {
@@ -739,24 +709,46 @@ html, body {
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  background: var(--c-bg);
+  background: var(--c-surface);
   border-radius: 10px;
   padding: 10px 12px;
 }
 
+.forecast-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
 .forecast-event-title {
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .forecast-event-meta {
   font-size: 12px;
   color: var(--c-text-sub);
+  margin-top: 2px;
 }
+
+.forecast-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.badge-income  { background: #e8f5e9; color: #2e7d32; }
+.badge-expense { background: #fce4ec; color: #c62828; }
+.badge-onetime { background: #fff3e0; color: #e65100; }
 
 .forecast-empty {
   color: var(--c-text-sub);
   font-size: 13px;
   margin: 0;
+  line-height: 1.7;
 }
 
 .stats-budget-row {

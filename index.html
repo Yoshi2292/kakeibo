@@ -296,19 +296,39 @@
       <h1>収支予測</h1>
       <span></span>
     </header>
-    <div class="stats-panel">
-      <div class="forecast-controls">
-        <label for="forecast-year">対象年</label>
-        <input type="number" id="forecast-year" min="2020" step="1">
-        <button id="btn-save-forecast" class="btn btn-primary">保存する</button>
-      </div>
-      <div id="forecast-form" class="forecast-form"></div>
+    <div class="forecast-panel">
       <div class="forecast-card">
-        <h3 class="forecast-section-title">ライフイベント</h3>
-        <div id="life-event-form"></div>
-        <button id="btn-add-event" class="btn btn-outline btn-large">＋ イベントを追加</button>
-        <div id="life-event-list"></div>
+        <h3 class="forecast-section-title">ルールを追加</h3>
+        <div class="forecast-field">
+          <label>項目名</label>
+          <input id="rule-name" type="text" placeholder="例: 給与、年金、生活費">
+        </div>
+        <div class="forecast-field-row">
+          <div class="forecast-field">
+            <label>収支区分</label>
+            <select id="rule-type">
+              <option value="income">収入</option>
+              <option value="expense">支出</option>
+            </select>
+          </div>
+          <div class="forecast-field">
+            <label>月額（円）</label>
+            <input id="rule-amount" type="number" inputmode="numeric" min="0" step="1" placeholder="0">
+          </div>
+        </div>
+        <div class="forecast-field-row">
+          <div class="forecast-field">
+            <label>開始年月</label>
+            <input id="rule-start" type="month">
+          </div>
+          <div class="forecast-field">
+            <label>終了年月（空欄＝永続）</label>
+            <input id="rule-end" type="month">
+          </div>
+        </div>
+        <button id="btn-add-rule" class="btn btn-primary btn-large">＋ 追加</button>
       </div>
+      <div id="forecast-rule-list" class="forecast-rule-list"></div>
     </div>
   </section>
 
