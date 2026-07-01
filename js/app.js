@@ -5,6 +5,8 @@ import { appendRow } from './sheets.js';
 import { loadMonthlyStats, loadYearlyStats } from './stats.js';
 import { loadMonthAssets, saveMonthAssets, loadAssetChart } from './assets.js';
 import { loadCashflow, saveCashflow } from './cashflow.js';
+import { initForecastSection, refreshForecastView } from './forecast.js';
+import { renderSimulationChart } from './simulate.js';
 
 // ── State ─────────────────────────────────
 let capturedImages = []; // [{dataUrl, base64}, ...]
@@ -15,7 +17,7 @@ let autoSave      = false;
 
 // ── DOM ───────────────────────────────────
 const $ = (id) => document.getElementById(id);
-const SECTIONS = ['auth', 'camera', 'form', 'success', 'stats', 'assets'];
+const SECTIONS = ['auth', 'camera', 'form', 'success', 'stats', 'assets', 'forecast', 'simulate'];
 
 // ── Stats state ───────────────────────────
 let statsTab = 'monthly';
@@ -46,6 +48,7 @@ let assetsDirty = false;
   setupTestModeToggle();
   setupSheetLinks();
   bindEvents();
+  initForecastSection();
 
   showSection(isLoggedIn() ? 'camera' : 'auth');
 
@@ -65,6 +68,16 @@ function bindEvents() {
   $('btn-back-assets').addEventListener('click', () => {
     if (confirmLeave()) showSection('camera');
   });
+  $('btn-forecast-from-assets').addEventListener('click', () => {
+    showSection('forecast');
+    refreshForecastView();
+  });
+  $('btn-simulate-from-assets').addEventListener('click', () => {
+    showSection('simulate');
+    refreshSimulation();
+  });
+  $('btn-back-forecast').addEventListener('click', () => showSection('assets'));
+  $('btn-back-simulate').addEventListener('click', () => showSection('assets'));
 
   document.querySelectorAll('.assets-tab').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -350,6 +363,17 @@ function showSection(name) {
   SECTIONS.forEach((s) => {
     $(`section-${s}`).classList.toggle('active', s === name);
   });
+}
+
+async function refreshSimulation() {
+  $('loading-stats').classList.remove('hidden');
+  try {
+    await renderSimulationChart();
+  } catch (e) {
+    showToast('シミュレーション読み込みエラー: ' + e.message, 'error');
+  } finally {
+    $('loading-stats').classList.add('hidden');
+  }
 }
 
 // ── Thumbnails ────────────────────────────
@@ -761,6 +785,11 @@ function showToast(msg, type = 'info') {
   el.className = `toast-${type} visible`;
   _toastTimer = setTimeout(() => el.classList.remove('visible'), 3500);
 }
+
+window.addEventListener('toast', (event) => {
+  const detail = event.detail || {};
+  showToast(detail.message || '', detail.type || 'info');
+});
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
