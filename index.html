@@ -210,7 +210,10 @@
     <header class="app-header">
       <button id="btn-back-assets" class="btn-icon" aria-label="戻る">←</button>
       <h1>資産管理</h1>
-      <span></span>
+      <div class="header-actions">
+        <button id="btn-forecast-from-assets" class="btn-icon" title="収支予測">📅</button>
+        <button id="btn-simulate-from-assets" class="btn-icon" title="シミュレーション">🧮</button>
+      </div>
     </header>
 
     <!-- 共通月ナビ（グラフタブでは非表示） -->
@@ -283,6 +286,43 @@
     <div id="loading-assets" class="loading-overlay hidden">
       <div class="spinner"></div>
       <p id="loading-assets-text">読み込み中...</p>
+    </div>
+  </section>
+
+  <!-- ===== Forecast ===== -->
+  <section id="section-forecast" class="section">
+    <header class="app-header">
+      <button id="btn-back-forecast" class="btn-icon" aria-label="戻る">←</button>
+      <h1>収支予測</h1>
+      <span></span>
+    </header>
+    <div class="stats-panel">
+      <div class="forecast-controls">
+        <label for="forecast-year">対象年</label>
+        <input type="number" id="forecast-year" min="2020" step="1">
+        <button id="btn-save-forecast" class="btn btn-primary">保存する</button>
+      </div>
+      <div id="forecast-form" class="forecast-form"></div>
+      <div class="forecast-card">
+        <h3 class="forecast-section-title">ライフイベント</h3>
+        <div id="life-event-form"></div>
+        <button id="btn-add-event" class="btn btn-outline btn-large">＋ イベントを追加</button>
+        <div id="life-event-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Simulate ===== -->
+  <section id="section-simulate" class="section">
+    <header class="app-header">
+      <button id="btn-back-simulate" class="btn-icon" aria-label="戻る">←</button>
+      <h1>シミュレーション</h1>
+      <span></span>
+    </header>
+    <div class="stats-panel">
+      <p class="stats-section-label">将来資産推移（実績/予測/イベント）</p>
+      <div class="chart-wrap"><canvas id="chart-simulation"></canvas></div>
+      <p id="simulation-empty" class="forecast-empty hidden">データがありません</p>
     </div>
   </section>
 

@@ -58,29 +58,56 @@ function aggregateByMedium(rows) {
   return Object.entries(map).sort((a, b) => b[1] - a[1]);
 }
 
-// 円グラフ描画
-function renderPie(id, entries) {
+// 予算比較バーグラフ
+function renderBudgetBar(id, entries) {
   destroyChart(id);
   const canvas = document.getElementById(id);
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (!entries.length) return;
-  const total = entries.reduce((s, [, v]) => s + v, 0);
+
+  const labels = entries.map(([k]) => k);
+  const values = entries.map(([, v]) => v);
+  const budgets = entries.map(([k]) => BUDGET?.[k] ?? null);
+  const overBudget = entries.filter(([k]) => (BUDGET?.[k] ?? 0) > 0 && entries.find(([name]) => name === k)[1] > (BUDGET?.[k] ?? 0));
+
   _charts[id] = new Chart(canvas, {
-    type: 'pie',
+    type: 'bar',
     data: {
-      labels: entries.map(([k]) => k),
-      datasets: [{ data: entries.map(([, v]) => v), backgroundColor: PALETTE }],
+      labels,
+      datasets: [
+        {
+          label: '実績',
+          data: values,
+          backgroundColor: labels.map((label) => overBudget.some(([name]) => name === label) ? '#e15759' : PALETTE[labels.indexOf(label) % PALETTE.length] + 'dd'),
+          borderRadius: 6,
+        },
+        {
+          label: '予算',
+          data: budgets.map((budget) => budget ?? null),
+          type: 'line',
+          borderColor: '#2e7d32',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0,
+          spanGaps: true,
+        },
+      ],
     },
     options: {
+      responsive: true,
       plugins: {
         legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12, padding: 8 } },
         tooltip: {
           callbacks: {
-            label: ctx => `${ctx.label}: ¥${ctx.raw.toLocaleString()} (${(ctx.raw / total * 100).toFixed(1)}%)`,
+            label: tooltipItem => `${tooltipItem.dataset.label}: ¥${Number(tooltipItem.raw).toLocaleString()}`,
           },
         },
+      },
+      scales: {
+        x: { stacked: false },
+        y: { ticks: { callback: v => `¥${Number(v).toLocaleString()}` } },
       },
     },
   });
@@ -146,7 +173,7 @@ export async function loadMonthlyStats(year, month) {
   document.getElementById('stats-monthly-total').textContent =
     entries.length ? `支出合計　¥${total.toLocaleString()}` : 'データがありません';
 
-  renderPie('chart-monthly-pie', entries);
+  renderBudgetBar('chart-monthly-pie', entries);
 }
 
 export async function loadYearlyStats(year) {
@@ -163,4 +190,31 @@ export async function loadYearlyStats(year) {
 
   renderBar('chart-yearly-bar', monthlyRows);
   renderPie('chart-yearly-pie', annual);
+}
+
+function renderPie(id, entries) {
+  destroyChart(id);
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!entries.length) return;
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+  _charts[id] = new Chart(canvas, {
+    type: 'pie',
+    data: {
+      labels: entries.map(([k]) => k),
+      datasets: [{ data: entries.map(([, v]) => v), backgroundColor: PALETTE }],
+    },
+    options: {
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12, padding: 8 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.label}: ¥${ctx.raw.toLocaleString()} (${(ctx.raw / total * 100).toFixed(1)}%)`,
+          },
+        },
+      },
+    },
+  });
 }
