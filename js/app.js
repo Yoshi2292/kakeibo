@@ -68,13 +68,15 @@ function bindEvents() {
   $('btn-back-assets').addEventListener('click', () => {
     if (confirmLeave()) showSection('camera');
   });
-  $('btn-forecast-from-assets').addEventListener('click', () => {
+  $('btn-forecast-from-assets').addEventListener('click', async () => {
     showSection('forecast');
-    refreshForecastView();
+    try { await refreshForecastView(); }
+    catch (e) { showToast('収支予測の読み込みエラー: ' + e.message, 'error'); }
   });
-  $('btn-simulate-from-assets').addEventListener('click', () => {
+  $('btn-simulate-from-assets').addEventListener('click', async () => {
     showSection('simulate');
-    refreshSimulation();
+    try { await refreshSimulation(); }
+    catch (e) { showToast('シミュレーション読み込みエラー: ' + e.message, 'error'); }
   });
   $('btn-back-forecast').addEventListener('click', () => showSection('assets'));
   $('btn-back-simulate').addEventListener('click', () => showSection('assets'));
@@ -366,13 +368,11 @@ function showSection(name) {
 }
 
 async function refreshSimulation() {
-  $('loading-stats').classList.remove('hidden');
+  setAssetsLoading(true, '計算中...');
   try {
     await renderSimulationChart();
-  } catch (e) {
-    showToast('シミュレーション読み込みエラー: ' + e.message, 'error');
   } finally {
-    $('loading-stats').classList.add('hidden');
+    setAssetsLoading(false);
   }
 }
 
