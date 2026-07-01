@@ -344,7 +344,7 @@ export function initForecastSection() {
   }
 
   document.addEventListener('click', async (event) => {
-    const btn = event.target.closest('[data-index]');
+    const btn = event.target.closest('#life-event-list [data-index]');
     if (!btn) return;
     const index = Number(btn.dataset.index);
     try {
@@ -355,6 +355,4 @@ export function initForecastSection() {
       window.dispatchEvent(new CustomEvent('toast', { detail: { message: '削除に失敗しました: ' + e.message, type: 'error' } }));
     }
   });
-
-  refreshForecastView();
 }
