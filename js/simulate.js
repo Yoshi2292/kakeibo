@@ -1,183 +1,140 @@
 import { getToken } from './auth.js';
+import { fetchRules } from './forecast.js';
 
 const SHEET_ASSET = '資産管理';
-const SHEET_FORECAST = '収支予測';
-const SHEET_EVENTS = 'ライフイベント';
 
-function getBase() {
+function base() {
   return `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}`;
 }
 
-async function sheetsFetch(token, url, options = {}) {
-  const res = await fetch(url, {
-    ...options,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...options.headers },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const msg = err.error?.message ?? `Sheets API エラー (${res.status})`;
-    throw new Error(msg);
-  }
-  return res.json();
-}
-
-async function fetchSheetRows(token, sheetName, range) {
-  const url = `${getBase()}/values/${encodeURIComponent(`'${sheetName}'!${range}`)}?valueRenderOption=UNFORMATTED_VALUE`;
+async function fetchAssetRows(token) {
+  const url = `${base()}/values/${encodeURIComponent(`'${SHEET_ASSET}'!A:C`)}?valueRenderOption=UNFORMATTED_VALUE`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) return [];
-  const data = await res.json();
-  return data.values ?? [];
+  return (await res.json()).values ?? [];
 }
 
-function parseAssetRows(rows) {
+function parseAssets(rows) {
   const result = {};
-  rows.slice(1).forEach((row) => {
-    const ym = String(row[0] ?? '').trim();
+  rows.slice(1).forEach(row => {
+    const ym  = String(row[0] ?? '').trim();
     const cat = String(row[1] ?? '').trim();
-    const amount = Number(row[2]) || 0;
+    const amt = Number(row[2]) || 0;
     if (!ym || !cat) return;
     if (!result[ym]) result[ym] = {};
-    result[ym][cat] = amount;
+    result[ym][cat] = amt;
   });
   return result;
 }
 
-function parseForecastRows(rows) {
-  const result = [];
-  rows.slice(1).forEach((row) => {
-    const ym = String(row[0] ?? '').trim();
-    const item = String(row[1] ?? '').trim();
-    const amount = Number(row[2]) || 0;
-    const kind = String(row[3] ?? '').trim();
-    const flag = String(row[4] ?? '').trim();
-    if (!ym || !item || !kind || !flag) return;
-    result.push({ ym, item, amount, kind, flag });
-  });
-  return result;
-}
-
-function parseEventRows(rows) {
-  return rows.slice(1).map((row) => ({
-    ym: String(row[0] ?? '').trim(),
-    name: String(row[1] ?? '').trim(),
-    amount: Number(row[2]) || 0,
-    memo: String(row[3] ?? '').trim(),
-  })).filter((row) => row.ym && row.name);
-}
-
-function toMonthIndex(ym) {
-  const [year, month] = ym.split('-').map(Number);
-  return year * 12 + month;
+function calcNetWorth(monthData) {
+  return Object.entries(monthData).reduce((sum, [cat, val]) => {
+    return sum + (LIABILITY_CATEGORIES.includes(cat) ? -Number(val) : Number(val));
+  }, 0);
 }
 
 export async function renderSimulationChart() {
   const token = await getToken();
-  const [assetRows, forecastRows, eventRows] = await Promise.all([
-    fetchSheetRows(token, SHEET_ASSET, 'A:C'),
-    fetchSheetRows(token, SHEET_FORECAST, 'A:E'),
-    fetchSheetRows(token, SHEET_EVENTS, 'A:D'),
+  const [assetRows, rules] = await Promise.all([
+    fetchAssetRows(token),
+    fetchRules(token),
   ]);
 
-  const assets = parseAssetRows(assetRows);
-  const forecast = parseForecastRows(forecastRows);
-  const events = parseEventRows(eventRows);
+  const assets = parseAssets(assetRows);
+  const sortedMonths = Object.keys(assets).sort();
+  const empty = document.getElementById('simulation-empty');
 
-  const baseMonths = Object.keys(assets).sort();
-  const latestMonth = baseMonths[baseMonths.length - 1] ?? `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-  const currentYear = new Date().getFullYear();
-  const months = [];
+  if (!sortedMonths.length) {
+    if (empty) empty.classList.remove('hidden');
+    return;
+  }
+  if (empty) empty.classList.add('hidden');
+
+  const latestMonth = sortedMonths[sortedMonths.length - 1];
+  let balance = calcNetWorth(assets[latestMonth]);
+
+  const now = new Date();
+  const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [sy, sm] = latestMonth.split('-').map(Number);
+  const MONTHS = 20 * 12;
+
   const labels = [];
   const data = [];
-  const styles = [];
+  let pastEndIdx = -1;
   const eventMarkers = [];
-  let balance = 0;
 
-  const baseAsset = (assets[latestMonth] && typeof assets[latestMonth] === 'object')
-    ? Object.values(assets[latestMonth]).reduce((sum, v) => sum + Number(v || 0), 0)
-    : 0;
-  balance = baseAsset;
+  for (let i = 1; i <= MONTHS; i++) {
+    const year  = sy + Math.floor((sm + i - 1) / 12);
+    const month = ((sm + i - 1) % 12) + 1;
+    const ym    = `${year}-${String(month).padStart(2, '0')}`;
 
-  const currentMonth = `${currentYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-  const startYear = Number(currentMonth.split('-')[0]);
-  const startMonth = Number(currentMonth.split('-')[1]);
-  const totalMonths = 20 * 12;
+    const active  = rules.filter(r => ym >= r.start && (!r.end || ym <= r.end));
+    const income  = active.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0);
+    const expense = active.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0);
+    balance += income - expense;
 
-  for (let i = 0; i <= totalMonths; i++) {
-    const year = startYear + Math.floor((startMonth + i - 1) / 12);
-    const month = ((startMonth + i - 1) % 12) + 1;
-    const ym = `${year}-${String(month).padStart(2, '0')}`;
-    months.push(ym);
     labels.push(`${year}/${String(month).padStart(2, '0')}`);
-
-    const monthForecast = forecast.filter((item) => item.ym === ym && item.flag === 'forecast');
-    const monthActual = forecast.filter((item) => item.ym === ym && item.flag === 'actual');
-    const monthlyIncome = monthForecast.filter((item) => item.kind === 'income').reduce((sum, item) => sum + item.amount, 0);
-    const monthlyExpense = monthForecast.filter((item) => item.kind === 'expense').reduce((sum, item) => sum + item.amount, 0);
-    const monthlyActualIncome = monthActual.filter((item) => item.kind === 'income').reduce((sum, item) => sum + item.amount, 0);
-    const monthlyActualExpense = monthActual.filter((item) => item.kind === 'expense').reduce((sum, item) => sum + item.amount, 0);
-    const eventAmount = events.filter((event) => event.ym === ym).reduce((sum, event) => sum + event.amount, 0);
-
-    const isForecast = toMonthIndex(ym) >= toMonthIndex(currentMonth);
-    const monthlyNet = isForecast
-      ? monthlyIncome - monthlyExpense - eventAmount
-      : monthlyActualIncome - monthlyActualExpense - eventAmount;
-
-    balance += monthlyNet;
     data.push(balance);
-    styles.push(isForecast ? 'dashed' : 'solid');
+    if (ym <= currentYm) pastEndIdx = i - 1;
 
-    events.filter((event) => event.ym === ym).forEach((event) => {
-      eventMarkers.push({ label: `${event.name} -${event.amount.toLocaleString()}`, value: labels.length - 1 });
+    // 一時支出（start === end）はマーカー表示
+    active.filter(r => r.start === r.end).forEach(r => {
+      eventMarkers.push({ label: r.name, idx: i - 1 });
     });
   }
 
   const canvas = document.getElementById('chart-simulation');
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const existing = Chart.getChart(canvas);
+  if (existing) existing.destroy();
 
-  new Chart(ctx, {
+  new Chart(canvas.getContext('2d'), {
     type: 'line',
     data: {
       labels,
       datasets: [{
         label: '純資産推移',
         data,
-        borderColor: '#2e7d32',
         borderWidth: 2,
-        tension: 0.2,
+        tension: 0.1,
         pointRadius: 0,
+        segment: {
+          borderColor: ctx => ctx.p0DataIndex <= pastEndIdx ? '#2e7d32' : '#81c784',
+          borderDash:  ctx => ctx.p0DataIndex <= pastEndIdx ? undefined : [5, 4],
+        },
       }],
     },
     options: {
       responsive: true,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (ctx) => `¥${Number(ctx.raw).toLocaleString()}` } },
+        tooltip: {
+          callbacks: {
+            label: ctx => `¥${Math.round(Number(ctx.raw) / 10000).toLocaleString()}万`,
+          },
+        },
       },
       scales: {
-        y: { ticks: { callback: (v) => `¥${Number(v).toLocaleString()}` } },
+        x: { ticks: { maxTicksLimit: 12, font: { size: 10 } } },
+        y: { ticks: { callback: v => `¥${Math.round(v / 10000)}万` } },
       },
     },
     plugins: [{
       id: 'event-markers',
       afterDraw(chart) {
+        if (!eventMarkers.length) return;
         const { ctx, chartArea, scales } = chart;
-        if (!chartArea || !scales.x) return;
         ctx.save();
         ctx.strokeStyle = '#e15759';
         ctx.lineWidth = 1;
-        eventMarkers.forEach((marker) => {
-          const x = scales.x.getPixelForValue(marker.value);
-          ctx.beginPath();
-          ctx.moveTo(x, chartArea.top);
-          ctx.lineTo(x, chartArea.bottom);
-          ctx.stroke();
+        eventMarkers.forEach(m => {
+          const x = scales.x.getPixelForValue(m.idx);
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath(); ctx.moveTo(x, chartArea.top); ctx.lineTo(x, chartArea.bottom); ctx.stroke();
+          ctx.setLineDash([]);
           ctx.fillStyle = '#e15759';
-          ctx.fillRect(x - 4, chartArea.top + 4, 8, 12);
-          ctx.fillStyle = '#fff';
-          ctx.font = '10px sans-serif';
-          ctx.fillText(marker.label, x + 5, chartArea.top + 12);
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillText(m.label, x + 3, chartArea.top + 14);
         });
         ctx.restore();
       },
