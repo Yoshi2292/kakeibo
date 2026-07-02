@@ -692,6 +692,30 @@ html, body {
   width: 100%;
 }
 
+.forecast-mode-toggle {
+  display: flex;
+  gap: 0;
+  border: 1.5px solid var(--c-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.forecast-mode-btn {
+  flex: 1;
+  padding: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  background: var(--c-bg);
+  color: var(--c-text-sub);
+  cursor: pointer;
+}
+
+.forecast-mode-btn.active {
+  background: var(--c-primary);
+  color: #fff;
+}
+
 .forecast-field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
