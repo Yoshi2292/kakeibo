@@ -133,6 +133,29 @@ export async function refreshForecastView() {
 }
 
 export function initForecastSection() {
+  let isOnetime = false;
+
+  // モード切替
+  document.querySelectorAll('.forecast-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.forecast-mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      isOnetime = btn.dataset.mode === 'onetime';
+      const endGroup   = document.getElementById('rule-end-group');
+      const startLabel = document.getElementById('rule-start-label');
+      const amountLabel = document.getElementById('rule-amount-label');
+      if (isOnetime) {
+        endGroup?.classList.add('hidden');
+        if (startLabel) startLabel.textContent = '年月';
+        if (amountLabel) amountLabel.textContent = '金額（円）';
+      } else {
+        endGroup?.classList.remove('hidden');
+        if (startLabel) startLabel.textContent = '開始年月';
+        if (amountLabel) amountLabel.textContent = '月額（円）';
+      }
+    });
+  });
+
   const addBtn = document.getElementById('btn-add-rule');
   if (addBtn) {
     addBtn.addEventListener('click', async () => {
@@ -140,18 +163,18 @@ export function initForecastSection() {
       const type   = document.getElementById('rule-type')?.value;
       const amount = Number(document.getElementById('rule-amount')?.value) || 0;
       const start  = document.getElementById('rule-start')?.value;
-      const end    = document.getElementById('rule-end')?.value || '';
+      const end    = isOnetime ? start : (document.getElementById('rule-end')?.value || '');
       if (!name || !start || !amount) {
-        window.dispatchEvent(new CustomEvent('toast', { detail: { message: '項目名・開始年月・月額は必須です', type: 'error' } }));
+        window.dispatchEvent(new CustomEvent('toast', { detail: { message: '項目名・年月・金額は必須です', type: 'error' } }));
         return;
       }
       try {
         await addRule({ start, end, name, type, amount });
         document.getElementById('rule-name').value   = '';
         document.getElementById('rule-amount').value = '';
-        document.getElementById('rule-end').value    = '';
+        if (!isOnetime) document.getElementById('rule-end').value = '';
         await refreshForecastView();
-        window.dispatchEvent(new CustomEvent('toast', { detail: { message: 'ルールを追加しました', type: 'success' } }));
+        window.dispatchEvent(new CustomEvent('toast', { detail: { message: isOnetime ? 'イベントを追加しました' : 'ルールを追加しました', type: 'success' } }));
       } catch (e) {
         window.dispatchEvent(new CustomEvent('toast', { detail: { message: '追加に失敗: ' + e.message, type: 'error' } }));
       }
@@ -164,7 +187,7 @@ export function initForecastSection() {
     try {
       await deleteRule(Number(btn.dataset.ruleIndex));
       await refreshForecastView();
-      window.dispatchEvent(new CustomEvent('toast', { detail: { message: 'ルールを削除しました', type: 'success' } }));
+      window.dispatchEvent(new CustomEvent('toast', { detail: { message: '削除しました', type: 'success' } }));
     } catch (err) {
       window.dispatchEvent(new CustomEvent('toast', { detail: { message: '削除に失敗: ' + err.message, type: 'error' } }));
     }

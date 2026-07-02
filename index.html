@@ -298,10 +298,14 @@
     </header>
     <div class="forecast-panel">
       <div class="forecast-card">
-        <h3 class="forecast-section-title">ルールを追加</h3>
+        <h3 class="forecast-section-title">追加</h3>
+        <div class="forecast-mode-toggle">
+          <button type="button" class="forecast-mode-btn active" data-mode="recurring">定期</button>
+          <button type="button" class="forecast-mode-btn" data-mode="onetime">一時イベント</button>
+        </div>
         <div class="forecast-field">
           <label>項目名</label>
-          <input id="rule-name" type="text" placeholder="例: 給与、年金、生活費">
+          <input id="rule-name" type="text" placeholder="例: 給与、大学入学金">
         </div>
         <div class="forecast-field-row">
           <div class="forecast-field">
@@ -312,16 +316,16 @@
             </select>
           </div>
           <div class="forecast-field">
-            <label>月額（円）</label>
+            <label id="rule-amount-label">月額（円）</label>
             <input id="rule-amount" type="number" inputmode="numeric" min="0" step="1" placeholder="0">
           </div>
         </div>
-        <div class="forecast-field-row">
+        <div class="forecast-field-row" id="rule-date-row">
           <div class="forecast-field">
-            <label>開始年月</label>
+            <label id="rule-start-label">開始年月</label>
             <input id="rule-start" type="month">
           </div>
-          <div class="forecast-field">
+          <div class="forecast-field" id="rule-end-group">
             <label>終了年月（空欄＝永続）</label>
             <input id="rule-end" type="month">
           </div>
