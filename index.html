@@ -344,8 +344,11 @@
       <span></span>
     </header>
     <div class="stats-panel">
-      <p class="stats-section-label">将来資産推移（実績/予測/イベント）</p>
-      <div class="chart-wrap"><canvas id="chart-simulation"></canvas></div>
+      <p class="stats-section-label">将来資産推移 — ピンチでズーム・スワイプでスクロール</p>
+      <div class="chart-wrap simulate-chart-wrap"><canvas id="chart-simulation"></canvas></div>
+      <div class="simulate-controls">
+        <button id="btn-reset-zoom" class="btn btn-outline btn-small">ズームリセット</button>
+      </div>
       <p id="simulation-empty" class="forecast-empty hidden">データがありません</p>
     </div>
   </section>
@@ -367,6 +370,8 @@
 
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script src="config.js"></script>
 <script type="module" src="js/app.js"></script>
 </body>

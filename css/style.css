@@ -637,6 +637,17 @@ html, body {
   position: relative;
   width: 100%;
 }
+.simulate-chart-wrap {
+  cursor: grab;
+}
+.simulate-chart-wrap:active {
+  cursor: grabbing;
+}
+.simulate-controls {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 0 0;
+}
 
 /* =====================
    Forecast / Simulation

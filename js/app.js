@@ -80,6 +80,10 @@ function bindEvents() {
   });
   $('btn-back-forecast').addEventListener('click', () => showSection('assets'));
   $('btn-back-simulate').addEventListener('click', () => showSection('assets'));
+  $('btn-reset-zoom').addEventListener('click', () => {
+    const chart = Chart.getChart(document.getElementById('chart-simulation'));
+    if (chart) chart.resetZoom();
+  });
 
   document.querySelectorAll('.assets-tab').forEach(btn => {
     btn.addEventListener('click', () => {

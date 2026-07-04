@@ -33,6 +33,25 @@ function calcNetWorth(monthData) {
   }, 0);
 }
 
+// ラベルが重ならないよう y 座標をスタッキング
+function buildLabelSlots(eventMarkers, scales, chartArea) {
+  const LINE_H = 13;
+  const MIN_X_GAP = 48;
+  const slots = [];
+
+  eventMarkers.forEach(m => {
+    const x = scales.x.getPixelForValue(m.idx);
+    let y = chartArea.top + LINE_H;
+    for (const s of slots) {
+      if (Math.abs(x - s.x) < MIN_X_GAP) {
+        y = Math.max(y, s.y + LINE_H);
+      }
+    }
+    slots.push({ x, y, label: m.label });
+  });
+  return slots;
+}
+
 export async function renderSimulationChart() {
   const token = await getToken();
   const [assetRows, rules] = await Promise.all([
@@ -77,7 +96,6 @@ export async function renderSimulationChart() {
     data.push(balance);
     if (ym <= currentYm) pastEndIdx = i - 1;
 
-    // 一時支出（start === end）はマーカー表示
     active.filter(r => r.start === r.end).forEach(r => {
       eventMarkers.push({ label: r.name, idx: i - 1 });
     });
@@ -87,6 +105,9 @@ export async function renderSimulationChart() {
   if (!canvas) return;
   const existing = Chart.getChart(canvas);
   if (existing) existing.destroy();
+
+  // ピンチ/パン用に touch-action を制御
+  canvas.style.touchAction = 'none';
 
   new Chart(canvas.getContext('2d'), {
     type: 'line',
@@ -113,9 +134,20 @@ export async function renderSimulationChart() {
             label: ctx => `¥${Math.round(Number(ctx.raw) / 10000).toLocaleString()}万`,
           },
         },
+        zoom: {
+          pan: {
+            enabled: true,
+            mode: 'x',
+          },
+          zoom: {
+            wheel: { enabled: true, speed: 0.1 },
+            pinch: { enabled: true },
+            mode: 'x',
+          },
+        },
       },
       scales: {
-        x: { ticks: { maxTicksLimit: 12, font: { size: 10 } } },
+        x: { ticks: { maxTicksLimit: 10, font: { size: 10 } } },
         y: { ticks: { callback: v => `¥${Math.round(v / 10000)}万` } },
       },
     },
@@ -125,17 +157,33 @@ export async function renderSimulationChart() {
         if (!eventMarkers.length) return;
         const { ctx, chartArea, scales } = chart;
         ctx.save();
-        ctx.strokeStyle = '#e15759';
-        ctx.lineWidth = 1;
-        eventMarkers.forEach(m => {
-          const x = scales.x.getPixelForValue(m.idx);
+
+        const slots = buildLabelSlots(eventMarkers, scales, chartArea);
+
+        slots.forEach(s => {
+          const x = s.x;
+
+          // 縦線
+          ctx.strokeStyle = 'rgba(225, 87, 89, 0.7)';
+          ctx.lineWidth = 1;
           ctx.setLineDash([3, 3]);
-          ctx.beginPath(); ctx.moveTo(x, chartArea.top); ctx.lineTo(x, chartArea.bottom); ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(x, chartArea.top);
+          ctx.lineTo(x, chartArea.bottom);
+          ctx.stroke();
           ctx.setLineDash([]);
-          ctx.fillStyle = '#e15759';
+
+          // ラベル背景
           ctx.font = 'bold 10px sans-serif';
-          ctx.fillText(m.label, x + 3, chartArea.top + 14);
+          const textW = ctx.measureText(s.label).width;
+          ctx.fillStyle = 'rgba(255,255,255,0.85)';
+          ctx.fillRect(x + 2, s.y - 11, textW + 4, 13);
+
+          // ラベル文字
+          ctx.fillStyle = '#c62828';
+          ctx.fillText(s.label, x + 4, s.y);
         });
+
         ctx.restore();
       },
     }],
