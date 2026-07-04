@@ -1,4 +1,4 @@
-const CACHE = 'kakeibo-v4';
+const CACHE = 'kakeibo-v5';
 
 const STATIC_ASSETS = [
   './icons/icon-192.png',
@@ -30,8 +30,10 @@ self.addEventListener('fetch', (e) => {
   if (isStaticAsset) {
     e.respondWith(caches.match(e.request).then((c) => c ?? fetch(e.request)));
   } else {
+    // JS/CSS/HTML はHTTPキャッシュをバイパスして常に最新を取得
+    const req = new Request(e.request, { cache: 'no-store' });
     e.respondWith(
-      fetch(e.request)
+      fetch(req)
         .then((res) => {
           const clone = res.clone();
           caches.open(CACHE).then((c) => c.put(e.request, clone));
