@@ -109,7 +109,12 @@ export async function renderSimulationChart() {
     }
 
     // 収支予測ルールの適用（振替先あり/なしで分岐）
-    const active = rules.filter(r => ym >= r.start && (!r.end || ym <= r.end));
+    const active = rules.filter(r => {
+      if (!(ym >= r.start && (!r.end || ym <= r.end))) return false;
+      // 年次ルール: 指定月にのみ適用
+      if (r.applyMonth > 0) return month === r.applyMonth;
+      return true;
+    });
     for (const r of active) {
       if (r.type === 'income') {
         if (r.transferTo && !LIABILITY_CATEGORIES.includes(r.transferTo)) {

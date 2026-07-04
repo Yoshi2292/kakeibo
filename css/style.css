@@ -821,6 +821,7 @@ html, body {
 .badge-expense   { background: #fce4ec; color: #c62828; }
 .badge-onetime   { background: #fff3e0; color: #e65100; }
 .badge-transfer  { background: #e3f2fd; color: #1565c0; }
+.badge-yearly    { background: #ede7f6; color: #512da8; }
 
 .forecast-field-hint {
   font-weight: 400;

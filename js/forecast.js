@@ -19,7 +19,7 @@ async function sheetsFetch(token, url, opts = {}) {
 }
 
 async function ensureSheet(token) {
-  const r = encodeURIComponent(`'${SHEET}'!A1:F1`);
+  const r = encodeURIComponent(`'${SHEET}'!A1:G1`);
   try {
     const d = await sheetsFetch(token, `${base()}/values/${r}`);
     if (d.values?.length) return;
@@ -32,14 +32,14 @@ async function ensureSheet(token) {
   }).catch(() => {});
   await sheetsFetch(token, `${base()}/values/${r}?valueInputOption=USER_ENTERED`, {
     method: 'PUT',
-    body: JSON.stringify({ values: [['開始年月', '終了年月', '項目名', '収支区分', '月額', '振替先']] }),
+    body: JSON.stringify({ values: [['開始年月', '終了年月', '項目名', '収支区分', '金額', '振替先', '適用月']] }),
   });
 }
 
 // simulate.js からも呼ばれる
 export async function fetchRules(token) {
   await ensureSheet(token);
-  const r = encodeURIComponent(`'${SHEET}'!A:F`);
+  const r = encodeURIComponent(`'${SHEET}'!A:G`);
   const res = await fetch(`${base()}/values/${r}?valueRenderOption=UNFORMATTED_VALUE`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -53,17 +53,21 @@ export async function fetchRules(token) {
     type:       String(row[3] ?? '').trim(),
     amount:     Number(row[4]) || 0,
     transferTo: String(row[5] ?? '').trim(),
+    applyMonth: Number(row[6]) || 0,   // 0=毎月, 1-12=毎年X月
   })).filter(r => r.start && r.name && r.type);
 }
 
 function ruleToRow(rule) {
-  return [rule.start, rule.end, rule.name, rule.type, rule.amount, rule.transferTo || ''];
+  return [
+    rule.start, rule.end, rule.name, rule.type,
+    rule.amount, rule.transferTo || '', rule.applyMonth || 0,
+  ];
 }
 
 async function addRule(rule) {
   const token = await getToken();
   await ensureSheet(token);
-  const r = encodeURIComponent(`'${SHEET}'!A:F`);
+  const r = encodeURIComponent(`'${SHEET}'!A:G`);
   await sheetsFetch(token, `${base()}/values/${r}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
     method: 'POST',
     body: JSON.stringify({ values: [ruleToRow(rule)] }),
@@ -71,7 +75,7 @@ async function addRule(rule) {
 }
 
 async function writeAllRules(token, rows) {
-  const r = encodeURIComponent(`'${SHEET}'!A2:F`);
+  const r = encodeURIComponent(`'${SHEET}'!A2:G`);
   await sheetsFetch(token, `${base()}/values/${r}:clear`, { method: 'POST', body: JSON.stringify({}) });
   if (rows.length) {
     await sheetsFetch(token, `${base()}/values/${r}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
@@ -107,8 +111,15 @@ function renderRuleList(rules) {
   const expense = rules.filter(r => r.type === 'expense');
 
   const makeCard = (rule) => {
-    const endLabel  = rule.end ? `〜 ${rule.end}` : '〜 永続';
     const isOneTime = rule.end && rule.start === rule.end;
+    const endLabel  = rule.end ? `〜 ${rule.end}` : '〜 永続';
+    const freqLabel = rule.applyMonth > 0 ? `毎年${rule.applyMonth}月` : '毎月';
+    const amtLabel  = isOneTime
+      ? `¥${rule.amount.toLocaleString()}`
+      : rule.applyMonth > 0
+        ? `¥${rule.amount.toLocaleString()}/年`
+        : `¥${rule.amount.toLocaleString()}/月`;
+
     const card = document.createElement('div');
     card.className = 'forecast-event-card';
     card.innerHTML = `
@@ -117,10 +128,11 @@ function renderRuleList(rules) {
           ${rule.name}
           <span class="forecast-badge ${rule.type === 'income' ? 'badge-income' : 'badge-expense'}">${rule.type === 'income' ? '収入' : '支出'}</span>
           ${isOneTime ? '<span class="forecast-badge badge-onetime">一時</span>' : ''}
+          ${rule.applyMonth > 0 ? '<span class="forecast-badge badge-yearly">年次</span>' : ''}
           ${rule.transferTo ? '<span class="forecast-badge badge-transfer">振替</span>' : ''}
         </div>
-        <div class="forecast-event-meta">${rule.start} ${isOneTime ? '' : endLabel}</div>
-        <div class="forecast-event-meta">¥${rule.amount.toLocaleString()}${isOneTime ? '' : '/月'}${rule.transferTo ? ` → ${rule.transferTo}` : ''}</div>
+        <div class="forecast-event-meta">${rule.start} ${isOneTime ? '' : endLabel}${!isOneTime ? ` • ${freqLabel}` : ''}</div>
+        <div class="forecast-event-meta">${amtLabel}${rule.transferTo ? ` → ${rule.transferTo}` : ''}</div>
       </div>
       <div class="forecast-card-actions">
         <button type="button" class="btn btn-outline btn-small" data-edit-index="${rule.index}">編集</button>
@@ -168,17 +180,46 @@ export function initForecastSection() {
     });
   }
 
+  const freqSelect       = document.getElementById('rule-freq');
+  const monthGroup       = document.getElementById('rule-month-group');
+  const applyMonthSelect = document.getElementById('rule-apply-month');
+  const amountLabel      = document.getElementById('rule-amount-label');
+  const freqRow          = document.getElementById('rule-freq-row');
+
+  function updateAmountLabel() {
+    if (!amountLabel) return;
+    if (isOnetime) {
+      amountLabel.textContent = '金額（円）';
+    } else if (freqSelect?.value === 'yearly') {
+      amountLabel.textContent = '年額（円）';
+    } else {
+      amountLabel.textContent = '月額（円）';
+    }
+  }
+
+  // 頻度セレクト変更
+  freqSelect?.addEventListener('change', () => {
+    const isYearly = freqSelect.value === 'yearly';
+    monthGroup?.classList.toggle('hidden', !isYearly);
+    updateAmountLabel();
+  });
+
   function setMode(onetime) {
     isOnetime = onetime;
     document.querySelectorAll('.forecast-mode-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.mode === (onetime ? 'onetime' : 'recurring'));
     });
-    const endGroup    = document.getElementById('rule-end-group');
-    const startLabel  = document.getElementById('rule-start-label');
-    const amountLabel = document.getElementById('rule-amount-label');
+    const endGroup   = document.getElementById('rule-end-group');
+    const startLabel = document.getElementById('rule-start-label');
     endGroup?.classList.toggle('hidden', onetime);
-    if (startLabel)  startLabel.textContent  = onetime ? '年月' : '開始年月';
-    if (amountLabel) amountLabel.textContent = onetime ? '金額（円）' : '月額（円）';
+    if (startLabel) startLabel.textContent = onetime ? '年月' : '開始年月';
+    // 一時イベントモードでは頻度行を非表示
+    freqRow?.classList.toggle('hidden', onetime);
+    if (onetime && freqSelect) {
+      freqSelect.value = 'monthly';
+      monthGroup?.classList.add('hidden');
+    }
+    updateAmountLabel();
   }
 
   function setEditMode(rule) {
@@ -189,6 +230,7 @@ export function initForecastSection() {
       editingIndex = rule.index;
       const isOneTime = rule.end && rule.start === rule.end;
       setMode(isOneTime);
+
       document.getElementById('rule-name').value   = rule.name;
       document.getElementById('rule-amount').value = rule.amount;
       document.getElementById('rule-start').value  = rule.start;
@@ -199,10 +241,24 @@ export function initForecastSection() {
         if (endEl) endEl.value = rule.end || '';
       }
       if (transferSelect) transferSelect.value = rule.transferTo || '';
+
+      // 頻度の復元
+      if (!isOneTime && freqSelect) {
+        if (rule.applyMonth > 0) {
+          freqSelect.value = 'yearly';
+          monthGroup?.classList.remove('hidden');
+          if (applyMonthSelect) applyMonthSelect.value = String(rule.applyMonth);
+        } else {
+          freqSelect.value = 'monthly';
+          monthGroup?.classList.add('hidden');
+        }
+        updateAmountLabel();
+      }
+
       if (addBtn) addBtn.textContent = '✔ 更新';
       cancelBtn?.classList.remove('hidden');
       if (titleEl) titleEl.textContent = '編集';
-      document.getElementById('btn-add-rule')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      addBtn?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     } else {
       editingIndex = null;
       setMode(false);
@@ -212,6 +268,9 @@ export function initForecastSection() {
       const endEl = document.getElementById('rule-end');
       if (endEl) endEl.value = '';
       if (transferSelect) transferSelect.value = '';
+      if (freqSelect) freqSelect.value = 'monthly';
+      monthGroup?.classList.add('hidden');
+      updateAmountLabel();
       if (addBtn) addBtn.textContent = '＋ 追加';
       cancelBtn?.classList.add('hidden');
       if (titleEl) titleEl.textContent = '追加';
@@ -233,18 +292,22 @@ export function initForecastSection() {
       const start      = document.getElementById('rule-start')?.value;
       const end        = isOnetime ? start : (document.getElementById('rule-end')?.value || '');
       const transferTo = transferSelect?.value || '';
+      const applyMonth = (!isOnetime && freqSelect?.value === 'yearly')
+        ? (Number(applyMonthSelect?.value) || 1)
+        : 0;
+
       if (!name || !start || !amount) {
         window.dispatchEvent(new CustomEvent('toast', { detail: { message: '項目名・年月・金額は必須です', type: 'error' } }));
         return;
       }
       try {
         if (editingIndex !== null) {
-          await updateRule(editingIndex, { start, end, name, type, amount, transferTo });
+          await updateRule(editingIndex, { start, end, name, type, amount, transferTo, applyMonth });
           setEditMode(null);
           await refreshForecastView();
           window.dispatchEvent(new CustomEvent('toast', { detail: { message: '更新しました', type: 'success' } }));
         } else {
-          await addRule({ start, end, name, type, amount, transferTo });
+          await addRule({ start, end, name, type, amount, transferTo, applyMonth });
           document.getElementById('rule-name').value   = '';
           document.getElementById('rule-amount').value = '';
           if (!isOnetime) document.getElementById('rule-end').value = '';
