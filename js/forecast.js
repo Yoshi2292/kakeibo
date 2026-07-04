@@ -50,7 +50,7 @@ export async function fetchRules(token) {
     start:  String(row[0] ?? '').trim(),
     end:    String(row[1] ?? '').trim(),
     name:   String(row[2] ?? '').trim(),
-    type:   String(row[3] ?? '').trim(),  // 'income' | 'expense'
+    type:   String(row[3] ?? '').trim(),
     amount: Number(row[4]) || 0,
   })).filter(r => r.start && r.name && r.type);
 }
@@ -65,31 +65,49 @@ async function addRule(rule) {
   });
 }
 
-async function deleteRule(index) {
-  const token = await getToken();
-  const rules = await fetchRules(token);
-  const remaining = rules.filter((_, i) => i !== index).map(r => [r.start, r.end, r.name, r.type, r.amount]);
+async function writeAllRules(token, rows) {
   const r = encodeURIComponent(`'${SHEET}'!A2:E`);
   await sheetsFetch(token, `${base()}/values/${r}:clear`, { method: 'POST', body: JSON.stringify({}) });
-  if (remaining.length) {
+  if (rows.length) {
     await sheetsFetch(token, `${base()}/values/${r}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
       method: 'POST',
-      body: JSON.stringify({ values: remaining }),
+      body: JSON.stringify({ values: rows }),
     });
   }
 }
 
+async function deleteRule(index) {
+  const token = await getToken();
+  const rules = await fetchRules(token);
+  const rows = rules.filter((_, i) => i !== index).map(r => [r.start, r.end, r.name, r.type, r.amount]);
+  await writeAllRules(token, rows);
+}
+
+async function updateRule(index, newRule) {
+  const token = await getToken();
+  const rules = await fetchRules(token);
+  const rows = rules.map((r, i) =>
+    i === index
+      ? [newRule.start, newRule.end, newRule.name, newRule.type, newRule.amount]
+      : [r.start, r.end, r.name, r.type, r.amount]
+  );
+  await writeAllRules(token, rows);
+}
+
+let cachedRules = [];
+
 function renderRuleList(rules) {
+  cachedRules = rules;
   const list = document.getElementById('forecast-rule-list');
   if (!list) return;
   if (!rules.length) {
-    list.innerHTML = '<p class="forecast-empty">ルールがまだありません<br><small>「ルールを追加」から収入・支出の予測を登録してください</small></p>';
+    list.innerHTML = '<p class="forecast-empty">ルールがまだありません<br><small>「＋ 追加」から収入・支出の予測を登録してください</small></p>';
     return;
   }
   const income  = rules.filter(r => r.type === 'income');
   const expense = rules.filter(r => r.type === 'expense');
 
-  const makeCard = (rule, i) => {
+  const makeCard = (rule) => {
     const endLabel  = rule.end ? `〜 ${rule.end}` : '〜 永続';
     const isOneTime = rule.end && rule.start === rule.end;
     const card = document.createElement('div');
@@ -101,10 +119,13 @@ function renderRuleList(rules) {
           <span class="forecast-badge ${rule.type === 'income' ? 'badge-income' : 'badge-expense'}">${rule.type === 'income' ? '収入' : '支出'}</span>
           ${isOneTime ? '<span class="forecast-badge badge-onetime">一時</span>' : ''}
         </div>
-        <div class="forecast-event-meta">${rule.start} ${endLabel}</div>
-        <div class="forecast-event-meta">¥${rule.amount.toLocaleString()}/月</div>
+        <div class="forecast-event-meta">${rule.start} ${isOneTime ? '' : endLabel}</div>
+        <div class="forecast-event-meta">¥${rule.amount.toLocaleString()}${isOneTime ? '' : '/月'}</div>
       </div>
-      <button type="button" class="btn btn-outline btn-small" data-rule-index="${rule.index}">削除</button>
+      <div class="forecast-card-actions">
+        <button type="button" class="btn btn-outline btn-small" data-edit-index="${rule.index}">編集</button>
+        <button type="button" class="btn btn-outline btn-small btn-danger-outline" data-rule-index="${rule.index}">削除</button>
+      </div>
     `;
     return card;
   };
@@ -134,28 +155,64 @@ export async function refreshForecastView() {
 
 export function initForecastSection() {
   let isOnetime = false;
+  let editingIndex = null;
+
+  function setMode(onetime) {
+    isOnetime = onetime;
+    document.querySelectorAll('.forecast-mode-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === (onetime ? 'onetime' : 'recurring'));
+    });
+    const endGroup    = document.getElementById('rule-end-group');
+    const startLabel  = document.getElementById('rule-start-label');
+    const amountLabel = document.getElementById('rule-amount-label');
+    endGroup?.classList.toggle('hidden', onetime);
+    if (startLabel)  startLabel.textContent  = onetime ? '年月' : '開始年月';
+    if (amountLabel) amountLabel.textContent = onetime ? '金額（円）' : '月額（円）';
+  }
+
+  function setEditMode(rule) {
+    const addBtn    = document.getElementById('btn-add-rule');
+    const cancelBtn = document.getElementById('btn-cancel-edit');
+    const titleEl   = document.querySelector('#section-forecast .forecast-section-title');
+    if (rule) {
+      editingIndex = rule.index;
+      const isOneTime = rule.end && rule.start === rule.end;
+      setMode(isOneTime);
+      document.getElementById('rule-name').value   = rule.name;
+      document.getElementById('rule-amount').value = rule.amount;
+      document.getElementById('rule-start').value  = rule.start;
+      const typeEl = document.getElementById('rule-type');
+      if (typeEl) typeEl.value = rule.type;
+      if (!isOneTime && document.getElementById('rule-end')) {
+        document.getElementById('rule-end').value = rule.end || '';
+      }
+      if (addBtn) addBtn.textContent = '✔ 更新';
+      cancelBtn?.classList.remove('hidden');
+      if (titleEl) titleEl.textContent = '編集';
+      document.getElementById('btn-add-rule')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      editingIndex = null;
+      setMode(false);
+      document.getElementById('rule-name').value   = '';
+      document.getElementById('rule-amount').value = '';
+      document.getElementById('rule-start').value  = '';
+      const endEl = document.getElementById('rule-end');
+      if (endEl) endEl.value = '';
+      if (addBtn) addBtn.textContent = '＋ 追加';
+      cancelBtn?.classList.add('hidden');
+      if (titleEl) titleEl.textContent = '追加';
+    }
+  }
 
   // モード切替
   document.querySelectorAll('.forecast-mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.forecast-mode-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      isOnetime = btn.dataset.mode === 'onetime';
-      const endGroup   = document.getElementById('rule-end-group');
-      const startLabel = document.getElementById('rule-start-label');
-      const amountLabel = document.getElementById('rule-amount-label');
-      if (isOnetime) {
-        endGroup?.classList.add('hidden');
-        if (startLabel) startLabel.textContent = '年月';
-        if (amountLabel) amountLabel.textContent = '金額（円）';
-      } else {
-        endGroup?.classList.remove('hidden');
-        if (startLabel) startLabel.textContent = '開始年月';
-        if (amountLabel) amountLabel.textContent = '月額（円）';
-      }
-    });
+    btn.addEventListener('click', () => setMode(btn.dataset.mode === 'onetime'));
   });
 
+  // キャンセル
+  document.getElementById('btn-cancel-edit')?.addEventListener('click', () => setEditMode(null));
+
+  // 追加 / 更新
   const addBtn = document.getElementById('btn-add-rule');
   if (addBtn) {
     addBtn.addEventListener('click', async () => {
@@ -169,27 +226,46 @@ export function initForecastSection() {
         return;
       }
       try {
-        await addRule({ start, end, name, type, amount });
-        document.getElementById('rule-name').value   = '';
-        document.getElementById('rule-amount').value = '';
-        if (!isOnetime) document.getElementById('rule-end').value = '';
-        await refreshForecastView();
-        window.dispatchEvent(new CustomEvent('toast', { detail: { message: isOnetime ? 'イベントを追加しました' : 'ルールを追加しました', type: 'success' } }));
+        if (editingIndex !== null) {
+          await updateRule(editingIndex, { start, end, name, type, amount });
+          setEditMode(null);
+          await refreshForecastView();
+          window.dispatchEvent(new CustomEvent('toast', { detail: { message: '更新しました', type: 'success' } }));
+        } else {
+          await addRule({ start, end, name, type, amount });
+          document.getElementById('rule-name').value   = '';
+          document.getElementById('rule-amount').value = '';
+          if (!isOnetime) document.getElementById('rule-end').value = '';
+          await refreshForecastView();
+          window.dispatchEvent(new CustomEvent('toast', { detail: { message: isOnetime ? 'イベントを追加しました' : 'ルールを追加しました', type: 'success' } }));
+        }
       } catch (e) {
-        window.dispatchEvent(new CustomEvent('toast', { detail: { message: '追加に失敗: ' + e.message, type: 'error' } }));
+        window.dispatchEvent(new CustomEvent('toast', { detail: { message: '保存に失敗: ' + e.message, type: 'error' } }));
       }
     });
   }
 
+  // 削除・編集
   document.addEventListener('click', async (e) => {
-    const btn = e.target.closest('#forecast-rule-list [data-rule-index]');
-    if (!btn) return;
-    try {
-      await deleteRule(Number(btn.dataset.ruleIndex));
-      await refreshForecastView();
-      window.dispatchEvent(new CustomEvent('toast', { detail: { message: '削除しました', type: 'success' } }));
-    } catch (err) {
-      window.dispatchEvent(new CustomEvent('toast', { detail: { message: '削除に失敗: ' + err.message, type: 'error' } }));
+    const delBtn  = e.target.closest('#forecast-rule-list [data-rule-index]');
+    const editBtn = e.target.closest('#forecast-rule-list [data-edit-index]');
+
+    if (delBtn) {
+      const idx = Number(delBtn.dataset.ruleIndex);
+      if (editingIndex === idx) setEditMode(null);
+      try {
+        await deleteRule(idx);
+        await refreshForecastView();
+        window.dispatchEvent(new CustomEvent('toast', { detail: { message: '削除しました', type: 'success' } }));
+      } catch (err) {
+        window.dispatchEvent(new CustomEvent('toast', { detail: { message: '削除に失敗: ' + err.message, type: 'error' } }));
+      }
+    }
+
+    if (editBtn) {
+      const idx  = Number(editBtn.dataset.editIndex);
+      const rule = cachedRules.find(r => r.index === idx);
+      if (rule) setEditMode(rule);
     }
   });
 }

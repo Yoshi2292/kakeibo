@@ -80,10 +80,12 @@ function bindEvents() {
   });
   $('btn-back-forecast').addEventListener('click', () => showSection('assets'));
   $('btn-back-simulate').addEventListener('click', () => showSection('assets'));
-  $('btn-reset-zoom').addEventListener('click', () => {
-    const chart = Chart.getChart(document.getElementById('chart-simulation'));
-    if (chart) chart.resetZoom();
-  });
+  function simChart() { return Chart.getChart(document.getElementById('chart-simulation')); }
+  $('btn-reset-zoom').addEventListener('click',  () => simChart()?.resetZoom());
+  $('btn-zoom-in').addEventListener('click',     () => simChart()?.zoom(1.25));
+  $('btn-zoom-out').addEventListener('click',    () => simChart()?.zoom(0.8));
+  $('btn-pan-left').addEventListener('click',    () => simChart()?.pan({ x: 120 }));
+  $('btn-pan-right').addEventListener('click',   () => simChart()?.pan({ x: -120 }));
 
   document.querySelectorAll('.assets-tab').forEach(btn => {
     btn.addEventListener('click', () => {

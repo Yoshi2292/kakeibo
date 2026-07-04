@@ -645,9 +645,32 @@ html, body {
 }
 .simulate-controls {
   display: flex;
-  justify-content: flex-end;
-  padding: 6px 0 0;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0 0;
+  gap: 8px;
 }
+.simulate-zoom-group {
+  display: flex;
+  gap: 4px;
+}
+.btn-zoom {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--c-text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.btn-zoom:hover { background: #f0f0f0; }
+.btn-zoom:active { background: #e0e0e0; }
 
 /* =====================
    Forecast / Simulation
@@ -739,6 +762,14 @@ html, body {
   gap: 4px;
 }
 
+.forecast-form-actions {
+  display: flex;
+  gap: 8px;
+}
+.forecast-form-actions .btn {
+  flex: 1;
+}
+
 .forecast-event-card {
   display: flex;
   justify-content: space-between;
@@ -748,6 +779,17 @@ html, body {
   border-radius: 10px;
   padding: 10px 12px;
 }
+.forecast-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.btn-danger-outline {
+  color: #c62828;
+  border-color: #e57373;
+}
+.btn-danger-outline:hover { background: #ffebee; }
 
 .forecast-card-body {
   flex: 1;

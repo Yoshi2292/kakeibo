@@ -330,7 +330,10 @@
             <input id="rule-end" type="month">
           </div>
         </div>
-        <button id="btn-add-rule" class="btn btn-primary btn-large">＋ 追加</button>
+        <div class="forecast-form-actions">
+          <button id="btn-add-rule" class="btn btn-primary btn-large">＋ 追加</button>
+          <button id="btn-cancel-edit" class="btn btn-outline btn-large hidden">キャンセル</button>
+        </div>
       </div>
       <div id="forecast-rule-list" class="forecast-rule-list"></div>
     </div>
@@ -344,10 +347,16 @@
       <span></span>
     </header>
     <div class="stats-panel">
-      <p class="stats-section-label">将来資産推移 — ピンチでズーム・スワイプでスクロール</p>
+      <p class="stats-section-label">将来資産推移（実績/予測/イベント）</p>
       <div class="chart-wrap simulate-chart-wrap"><canvas id="chart-simulation"></canvas></div>
       <div class="simulate-controls">
-        <button id="btn-reset-zoom" class="btn btn-outline btn-small">ズームリセット</button>
+        <div class="simulate-zoom-group">
+          <button id="btn-pan-left"  class="btn-zoom" title="過去へ">&#9664;</button>
+          <button id="btn-pan-right" class="btn-zoom" title="未来へ">&#9654;</button>
+          <button id="btn-zoom-out"  class="btn-zoom" title="縮小">−</button>
+          <button id="btn-zoom-in"   class="btn-zoom" title="拡大">＋</button>
+        </div>
+        <button id="btn-reset-zoom" class="btn btn-outline btn-small">全期間</button>
       </div>
       <p id="simulation-empty" class="forecast-empty hidden">データがありません</p>
     </div>
