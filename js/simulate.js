@@ -86,7 +86,7 @@ export async function renderSimulationChart() {
   const now = new Date();
   const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const [sy, sm] = latestMonth.split('-').map(Number);
-  const MONTHS = 20 * 12;
+  const MONTHS = Math.max(12, (2070 - sy) * 12 + (12 - sm));
 
   const labels = [];
   const data = [];
