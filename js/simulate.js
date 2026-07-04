@@ -108,11 +108,25 @@ export async function renderSimulationChart() {
       }
     }
 
-    // 収支予測ルールの適用
-    const active  = rules.filter(r => ym >= r.start && (!r.end || ym <= r.end));
-    const income  = active.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0);
-    const expense = active.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0);
-    floatingCash += income - expense;
+    // 収支予測ルールの適用（振替先あり/なしで分岐）
+    const active = rules.filter(r => ym >= r.start && (!r.end || ym <= r.end));
+    for (const r of active) {
+      if (r.type === 'income') {
+        if (r.transferTo && !LIABILITY_CATEGORIES.includes(r.transferTo)) {
+          // 退職金など → 特定口座への直接入金（以後その口座の利回りで成長）
+          categoryBalances[r.transferTo] = (categoryBalances[r.transferTo] ?? 0) + r.amount;
+        } else {
+          floatingCash += r.amount;
+        }
+      } else if (r.type === 'expense') {
+        floatingCash -= r.amount;
+        if (r.transferTo && !LIABILITY_CATEGORIES.includes(r.transferTo)) {
+          // 積立投資など → 振替先口座に同額を入金（純資産変動なし、以後利回りで成長）
+          categoryBalances[r.transferTo] = (categoryBalances[r.transferTo] ?? 0) + r.amount;
+        }
+        // 振替先なし → 消費（floatingCash が減るのみ）
+      }
+    }
 
     // 純資産 = 資産合計 - 負債合計 + 浮動現金
     const netWorth = Object.entries(categoryBalances).reduce((sum, [cat, val]) => {

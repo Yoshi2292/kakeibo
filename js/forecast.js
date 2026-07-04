@@ -19,7 +19,7 @@ async function sheetsFetch(token, url, opts = {}) {
 }
 
 async function ensureSheet(token) {
-  const r = encodeURIComponent(`'${SHEET}'!A1:E1`);
+  const r = encodeURIComponent(`'${SHEET}'!A1:F1`);
   try {
     const d = await sheetsFetch(token, `${base()}/values/${r}`);
     if (d.values?.length) return;
@@ -32,41 +32,46 @@ async function ensureSheet(token) {
   }).catch(() => {});
   await sheetsFetch(token, `${base()}/values/${r}?valueInputOption=USER_ENTERED`, {
     method: 'PUT',
-    body: JSON.stringify({ values: [['開始年月', '終了年月', '項目名', '収支区分', '月額']] }),
+    body: JSON.stringify({ values: [['開始年月', '終了年月', '項目名', '収支区分', '月額', '振替先']] }),
   });
 }
 
 // simulate.js からも呼ばれる
 export async function fetchRules(token) {
   await ensureSheet(token);
-  const r = encodeURIComponent(`'${SHEET}'!A:E`);
+  const r = encodeURIComponent(`'${SHEET}'!A:F`);
   const res = await fetch(`${base()}/values/${r}?valueRenderOption=UNFORMATTED_VALUE`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) return [];
   const data = await res.json();
   return (data.values ?? []).slice(1).map((row, i) => ({
-    index:  i,
-    start:  String(row[0] ?? '').trim(),
-    end:    String(row[1] ?? '').trim(),
-    name:   String(row[2] ?? '').trim(),
-    type:   String(row[3] ?? '').trim(),
-    amount: Number(row[4]) || 0,
+    index:      i,
+    start:      String(row[0] ?? '').trim(),
+    end:        String(row[1] ?? '').trim(),
+    name:       String(row[2] ?? '').trim(),
+    type:       String(row[3] ?? '').trim(),
+    amount:     Number(row[4]) || 0,
+    transferTo: String(row[5] ?? '').trim(),
   })).filter(r => r.start && r.name && r.type);
+}
+
+function ruleToRow(rule) {
+  return [rule.start, rule.end, rule.name, rule.type, rule.amount, rule.transferTo || ''];
 }
 
 async function addRule(rule) {
   const token = await getToken();
   await ensureSheet(token);
-  const r = encodeURIComponent(`'${SHEET}'!A:E`);
+  const r = encodeURIComponent(`'${SHEET}'!A:F`);
   await sheetsFetch(token, `${base()}/values/${r}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
     method: 'POST',
-    body: JSON.stringify({ values: [[rule.start, rule.end, rule.name, rule.type, rule.amount]] }),
+    body: JSON.stringify({ values: [ruleToRow(rule)] }),
   });
 }
 
 async function writeAllRules(token, rows) {
-  const r = encodeURIComponent(`'${SHEET}'!A2:E`);
+  const r = encodeURIComponent(`'${SHEET}'!A2:F`);
   await sheetsFetch(token, `${base()}/values/${r}:clear`, { method: 'POST', body: JSON.stringify({}) });
   if (rows.length) {
     await sheetsFetch(token, `${base()}/values/${r}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
@@ -79,19 +84,13 @@ async function writeAllRules(token, rows) {
 async function deleteRule(index) {
   const token = await getToken();
   const rules = await fetchRules(token);
-  const rows = rules.filter((_, i) => i !== index).map(r => [r.start, r.end, r.name, r.type, r.amount]);
-  await writeAllRules(token, rows);
+  await writeAllRules(token, rules.filter((_, i) => i !== index).map(ruleToRow));
 }
 
 async function updateRule(index, newRule) {
   const token = await getToken();
   const rules = await fetchRules(token);
-  const rows = rules.map((r, i) =>
-    i === index
-      ? [newRule.start, newRule.end, newRule.name, newRule.type, newRule.amount]
-      : [r.start, r.end, r.name, r.type, r.amount]
-  );
-  await writeAllRules(token, rows);
+  await writeAllRules(token, rules.map((r, i) => i === index ? ruleToRow(newRule) : ruleToRow(r)));
 }
 
 let cachedRules = [];
@@ -118,9 +117,10 @@ function renderRuleList(rules) {
           ${rule.name}
           <span class="forecast-badge ${rule.type === 'income' ? 'badge-income' : 'badge-expense'}">${rule.type === 'income' ? '収入' : '支出'}</span>
           ${isOneTime ? '<span class="forecast-badge badge-onetime">一時</span>' : ''}
+          ${rule.transferTo ? '<span class="forecast-badge badge-transfer">振替</span>' : ''}
         </div>
         <div class="forecast-event-meta">${rule.start} ${isOneTime ? '' : endLabel}</div>
-        <div class="forecast-event-meta">¥${rule.amount.toLocaleString()}${isOneTime ? '' : '/月'}</div>
+        <div class="forecast-event-meta">¥${rule.amount.toLocaleString()}${isOneTime ? '' : '/月'}${rule.transferTo ? ` → ${rule.transferTo}` : ''}</div>
       </div>
       <div class="forecast-card-actions">
         <button type="button" class="btn btn-outline btn-small" data-edit-index="${rule.index}">編集</button>
@@ -157,6 +157,17 @@ export function initForecastSection() {
   let isOnetime = false;
   let editingIndex = null;
 
+  // 振替先セレクトボックスにASSET_CATEGORIESを設定
+  const transferSelect = document.getElementById('rule-transfer');
+  if (transferSelect) {
+    ASSET_CATEGORIES.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = cat;
+      transferSelect.appendChild(opt);
+    });
+  }
+
   function setMode(onetime) {
     isOnetime = onetime;
     document.querySelectorAll('.forecast-mode-btn').forEach(b => {
@@ -183,9 +194,11 @@ export function initForecastSection() {
       document.getElementById('rule-start').value  = rule.start;
       const typeEl = document.getElementById('rule-type');
       if (typeEl) typeEl.value = rule.type;
-      if (!isOneTime && document.getElementById('rule-end')) {
-        document.getElementById('rule-end').value = rule.end || '';
+      if (!isOneTime) {
+        const endEl = document.getElementById('rule-end');
+        if (endEl) endEl.value = rule.end || '';
       }
+      if (transferSelect) transferSelect.value = rule.transferTo || '';
       if (addBtn) addBtn.textContent = '✔ 更新';
       cancelBtn?.classList.remove('hidden');
       if (titleEl) titleEl.textContent = '編集';
@@ -198,44 +211,44 @@ export function initForecastSection() {
       document.getElementById('rule-start').value  = '';
       const endEl = document.getElementById('rule-end');
       if (endEl) endEl.value = '';
+      if (transferSelect) transferSelect.value = '';
       if (addBtn) addBtn.textContent = '＋ 追加';
       cancelBtn?.classList.add('hidden');
       if (titleEl) titleEl.textContent = '追加';
     }
   }
 
-  // モード切替
   document.querySelectorAll('.forecast-mode-btn').forEach(btn => {
     btn.addEventListener('click', () => setMode(btn.dataset.mode === 'onetime'));
   });
 
-  // キャンセル
   document.getElementById('btn-cancel-edit')?.addEventListener('click', () => setEditMode(null));
 
-  // 追加 / 更新
   const addBtn = document.getElementById('btn-add-rule');
   if (addBtn) {
     addBtn.addEventListener('click', async () => {
-      const name   = document.getElementById('rule-name')?.value?.trim();
-      const type   = document.getElementById('rule-type')?.value;
-      const amount = Number(document.getElementById('rule-amount')?.value) || 0;
-      const start  = document.getElementById('rule-start')?.value;
-      const end    = isOnetime ? start : (document.getElementById('rule-end')?.value || '');
+      const name       = document.getElementById('rule-name')?.value?.trim();
+      const type       = document.getElementById('rule-type')?.value;
+      const amount     = Number(document.getElementById('rule-amount')?.value) || 0;
+      const start      = document.getElementById('rule-start')?.value;
+      const end        = isOnetime ? start : (document.getElementById('rule-end')?.value || '');
+      const transferTo = transferSelect?.value || '';
       if (!name || !start || !amount) {
         window.dispatchEvent(new CustomEvent('toast', { detail: { message: '項目名・年月・金額は必須です', type: 'error' } }));
         return;
       }
       try {
         if (editingIndex !== null) {
-          await updateRule(editingIndex, { start, end, name, type, amount });
+          await updateRule(editingIndex, { start, end, name, type, amount, transferTo });
           setEditMode(null);
           await refreshForecastView();
           window.dispatchEvent(new CustomEvent('toast', { detail: { message: '更新しました', type: 'success' } }));
         } else {
-          await addRule({ start, end, name, type, amount });
+          await addRule({ start, end, name, type, amount, transferTo });
           document.getElementById('rule-name').value   = '';
           document.getElementById('rule-amount').value = '';
           if (!isOnetime) document.getElementById('rule-end').value = '';
+          if (transferSelect) transferSelect.value = '';
           await refreshForecastView();
           window.dispatchEvent(new CustomEvent('toast', { detail: { message: isOnetime ? 'イベントを追加しました' : 'ルールを追加しました', type: 'success' } }));
         }
@@ -245,7 +258,6 @@ export function initForecastSection() {
     });
   }
 
-  // 削除・編集
   document.addEventListener('click', async (e) => {
     const delBtn  = e.target.closest('#forecast-rule-list [data-rule-index]');
     const editBtn = e.target.closest('#forecast-rule-list [data-edit-index]');
