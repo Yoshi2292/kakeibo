@@ -1,5 +1,6 @@
 import { getToken } from './auth.js';
 import { fetchRules } from './forecast.js';
+import { loadReturnRates } from './assets.js';
 
 const SHEET_ASSET = '資産管理';
 
@@ -48,9 +49,10 @@ function buildLabelSlots(eventMarkers, scales, chartArea) {
 
 export async function renderSimulationChart() {
   const token = await getToken();
-  const [assetRows, rules] = await Promise.all([
+  const [assetRows, rules, savedRates] = await Promise.all([
     fetchAssetRows(token),
     fetchRules(token),
+    loadReturnRates(),
   ]);
 
   const assets = parseAssets(assetRows);
@@ -71,12 +73,15 @@ export async function renderSimulationChart() {
     categoryBalances[cat] = Number(val) || 0;
   }
 
-  // カテゴリ別月次利回り（年率% → 月次係数）
+  // カテゴリ別月次利回り: シート保存値を優先、なければ config のデフォルト
   const monthlyRates = Object.fromEntries(
-    ASSET_CATEGORY_DEFS.map(c => [c.name, (c.expectedReturn ?? 0) / 100 / 12])
+    ASSET_CATEGORY_DEFS.map(c => {
+      const rate = c.name in savedRates ? savedRates[c.name] : (c.expectedReturn ?? 0);
+      return [c.name, rate / 100 / 12];
+    })
   );
 
-  const hasGrowth = ASSET_CATEGORY_DEFS.some(c => (c.expectedReturn ?? 0) > 0);
+  const hasGrowth = Object.values(monthlyRates).some(r => r > 0);
 
   const now = new Date();
   const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;

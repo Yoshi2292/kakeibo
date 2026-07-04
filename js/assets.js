@@ -123,6 +123,56 @@ export async function saveMonthAssets(yearMonth, categories) {
   }
 }
 
+// ── 利回り設定 ────────────────────────────────
+const SHEET_RATES = '利回り設定';
+
+export async function loadReturnRates() {
+  const token = await getToken();
+  try {
+    const r = encodeURIComponent(`'${SHEET_RATES}'!A2:B`);
+    const res = await fetch(`${BASE()}/values/${r}?valueRenderOption=UNFORMATTED_VALUE`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return {};
+    const result = {};
+    ((await res.json()).values ?? []).forEach(row => {
+      const name = String(row[0] ?? '').trim();
+      const rate = Number(row[1]);
+      if (name) result[name] = isNaN(rate) ? 0 : rate;
+    });
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+export async function saveReturnRates(rates) {
+  const token = await getToken();
+  const hRange = encodeURIComponent(`'${SHEET_RATES}'!A1:B1`);
+  try {
+    const d = await sheetsFetch(token, `${BASE()}/values/${hRange}`);
+    if (!d.values?.length) throw new Error('empty');
+  } catch {
+    await sheetsFetch(token, `${BASE()}:batchUpdate`, {
+      method: 'POST',
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: SHEET_RATES } } }] }),
+    }).catch(() => {});
+    await sheetsFetch(token, `${BASE()}/values/${hRange}?valueInputOption=USER_ENTERED`, {
+      method: 'PUT',
+      body: JSON.stringify({ values: [['カテゴリ', '利回り%']] }),
+    });
+  }
+  const dRange = encodeURIComponent(`'${SHEET_RATES}'!A2:B`);
+  await sheetsFetch(token, `${BASE()}/values/${dRange}:clear`, { method: 'POST', body: JSON.stringify({}) });
+  const rows = Object.entries(rates);
+  if (rows.length) {
+    await sheetsFetch(token, `${BASE()}/values/${dRange}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
+      method: 'POST',
+      body: JSON.stringify({ values: rows }),
+    });
+  }
+}
+
 // 純資産推移グラフを描画（資産積み上げ＋負債マイナス＋純資産ライン）
 export async function loadAssetChart() {
   const token = await getToken();

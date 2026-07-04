@@ -3,7 +3,7 @@ import { setupCameraInput, setMaxPx, getMaxPx } from './camera.js';
 import { analyzeReceipts, setModel, getModel, setPromptMode, getPromptMode } from './ocr.js';
 import { appendRow } from './sheets.js';
 import { loadMonthlyStats, loadYearlyStats } from './stats.js';
-import { loadMonthAssets, saveMonthAssets, loadAssetChart } from './assets.js';
+import { loadMonthAssets, saveMonthAssets, loadAssetChart, loadReturnRates, saveReturnRates } from './assets.js';
 import { loadCashflow, saveCashflow } from './cashflow.js';
 import { initForecastSection, refreshForecastView } from './forecast.js';
 import { renderSimulationChart } from './simulate.js';
@@ -29,6 +29,7 @@ let assetsTab = 'input';
 let assetsYear = new Date().getFullYear();
 let assetsMonth = new Date().getMonth() + 1;
 let assetsDirty = false;
+let currentReturnRates = {};
 
 // ── Boot ──────────────────────────────────
 (async () => {
@@ -123,9 +124,14 @@ function bindEvents() {
     [...ASSET_CATEGORIES, ...LIABILITY_CATEGORIES].forEach(cat => {
       categories[cat] = Number(document.getElementById(`asset-input-${cat}`)?.value) || 0;
     });
+    const rates = {};
+    ASSET_CATEGORIES.forEach(cat => {
+      rates[cat] = Number(document.getElementById(`rate-input-${cat}`)?.value) || 0;
+    });
     setAssetsLoading(true, '保存中...');
     try {
-      await saveMonthAssets(yearMonth, categories);
+      await Promise.all([saveMonthAssets(yearMonth, categories), saveReturnRates(rates)]);
+      currentReturnRates = rates;
       clearDirty();
       showToast('資産データを保存しました', 'success');
     } catch (e) {
@@ -146,7 +152,7 @@ function bindEvents() {
         showToast('前月のデータがありません', 'error');
         return;
       }
-      renderAssetsForm(prevData);
+      renderAssetsForm(prevData, currentReturnRates);
       markDirty();
       $('btn-asset-carry-forward').classList.add('hidden');
       showToast('前月の残高を引き継ぎました');
@@ -582,14 +588,15 @@ async function refreshAssetsInput() {
   const yearMonth = `${assetsYear}-${String(assetsMonth).padStart(2, '0')}`;
   setAssetsLoading(true, '読み込み中...');
   try {
-    const data = await loadMonthAssets(yearMonth);
-    renderAssetsForm(data);
+    const [data, rates] = await Promise.all([loadMonthAssets(yearMonth), loadReturnRates()]);
+    currentReturnRates = rates;
+    renderAssetsForm(data, rates);
     const isEmpty = Object.keys(data).length === 0;
     $('btn-asset-carry-forward').classList.toggle('hidden', !isEmpty);
     clearDirty();
   } catch (e) {
     showToast('資産データの読み込みエラー: ' + e.message, 'error');
-    renderAssetsForm({});
+    renderAssetsForm({}, currentReturnRates);
     $('btn-asset-carry-forward').classList.remove('hidden');
     clearDirty();
   } finally {
@@ -597,7 +604,7 @@ async function refreshAssetsInput() {
   }
 }
 
-function renderAssetsForm(data) {
+function renderAssetsForm(data, rates = {}) {
   const form = $('assets-form');
   form.innerHTML = '';
 
@@ -608,26 +615,40 @@ function renderAssetsForm(data) {
     return h;
   };
 
-  const makeRow = (cat, value) => {
+  const makeRow = (cat, value, rate) => {
     const row = document.createElement('div');
     row.className = 'assets-row';
+    const hasRate = rate !== undefined;
     row.innerHTML = `
       <label class="assets-cat-label" for="asset-input-${cat}">${cat}</label>
-      <input type="number" id="asset-input-${cat}" class="assets-input"
-        inputmode="numeric" min="0" step="1" placeholder="0"
-        value="${value ?? ''}">
+      <div class="assets-input-group">
+        <input type="number" id="asset-input-${cat}" class="assets-input"
+          inputmode="numeric" min="0" step="1" placeholder="0"
+          value="${value ?? ''}">
+        ${hasRate ? `
+          <div class="rate-input-wrap">
+            <input type="number" id="rate-input-${cat}" class="rate-input"
+              inputmode="decimal" min="0" max="50" step="0.5" placeholder="0"
+              title="年間想定利回り（%）" value="${rate}">
+            <span class="rate-unit">%</span>
+          </div>
+        ` : ''}
+      </div>
     `;
     return row;
   };
 
   ASSET_GROUPS.forEach(({ group, items }) => {
     form.appendChild(makeHeader(group));
-    items.forEach(cat => form.appendChild(makeRow(cat, data[cat])));
+    items.forEach(cat => {
+      const rate = cat in rates ? rates[cat] : (ASSET_CATEGORY_DEFS.find(c => c.name === cat)?.expectedReturn ?? 0);
+      form.appendChild(makeRow(cat, data[cat], rate));
+    });
   });
   form.appendChild(makeHeader('負債'));
   LIABILITY_CATEGORIES.forEach(cat => form.appendChild(makeRow(cat, data[cat])));
 
-  form.querySelectorAll('.assets-input').forEach(input => {
+  form.querySelectorAll('.assets-input, .rate-input').forEach(input => {
     input.addEventListener('input', () => { markDirty(); updateAssetsTotal(); });
   });
   updateAssetsTotal();
