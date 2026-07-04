@@ -27,12 +27,6 @@ function parseAssets(rows) {
   return result;
 }
 
-function calcNetWorth(monthData) {
-  return Object.entries(monthData).reduce((sum, [cat, val]) => {
-    return sum + (LIABILITY_CATEGORIES.includes(cat) ? -Number(val) : Number(val));
-  }, 0);
-}
-
 // ラベルが重ならないよう y 座標をスタッキング
 function buildLabelSlots(eventMarkers, scales, chartArea) {
   const LINE_H = 13;
@@ -70,7 +64,19 @@ export async function renderSimulationChart() {
   if (empty) empty.classList.add('hidden');
 
   const latestMonth = sortedMonths[sortedMonths.length - 1];
-  let balance = calcNetWorth(assets[latestMonth]);
+
+  // カテゴリ別残高（予測ループで複利成長させる）
+  const categoryBalances = {};
+  for (const [cat, val] of Object.entries(assets[latestMonth])) {
+    categoryBalances[cat] = Number(val) || 0;
+  }
+
+  // カテゴリ別月次利回り（年率% → 月次係数）
+  const monthlyRates = Object.fromEntries(
+    ASSET_CATEGORY_DEFS.map(c => [c.name, (c.expectedReturn ?? 0) / 100 / 12])
+  );
+
+  const hasGrowth = ASSET_CATEGORY_DEFS.some(c => (c.expectedReturn ?? 0) > 0);
 
   const now = new Date();
   const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -82,20 +88,37 @@ export async function renderSimulationChart() {
   let pastEndIdx = -1;
   const eventMarkers = [];
 
+  // forecast rules が収支差をここに積む（利回り0の浮動現金として扱う）
+  let floatingCash = 0;
+
   for (let i = 1; i <= MONTHS; i++) {
     const year  = sy + Math.floor((sm + i - 1) / 12);
     const month = ((sm + i - 1) % 12) + 1;
     const ym    = `${year}-${String(month).padStart(2, '0')}`;
 
+    // 各資産カテゴリに月次複利成長を適用（負債には適用しない）
+    for (const [cat, rate] of Object.entries(monthlyRates)) {
+      if (rate > 0 && !LIABILITY_CATEGORIES.includes(cat) && cat in categoryBalances) {
+        categoryBalances[cat] *= (1 + rate);
+      }
+    }
+
+    // 収支予測ルールの適用
     const active  = rules.filter(r => ym >= r.start && (!r.end || ym <= r.end));
     const income  = active.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0);
     const expense = active.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0);
-    balance += income - expense;
+    floatingCash += income - expense;
+
+    // 純資産 = 資産合計 - 負債合計 + 浮動現金
+    const netWorth = Object.entries(categoryBalances).reduce((sum, [cat, val]) => {
+      return sum + (LIABILITY_CATEGORIES.includes(cat) ? -val : val);
+    }, 0) + floatingCash;
 
     labels.push(`${year}/${String(month).padStart(2, '0')}`);
-    data.push(balance);
+    data.push(netWorth);
     if (ym <= currentYm) pastEndIdx = i - 1;
 
+    // 一時イベントマーカー
     active.filter(r => r.start === r.end).forEach(r => {
       eventMarkers.push({ label: r.name, idx: i - 1 });
     });
@@ -108,6 +131,14 @@ export async function renderSimulationChart() {
 
   // ピンチ/パン用に touch-action を制御
   canvas.style.touchAction = 'none';
+
+  // セクションラベルに利回り反映の注記を追加
+  const labelEl = document.querySelector('#section-simulate .stats-section-label');
+  if (labelEl) {
+    labelEl.textContent = hasGrowth
+      ? '将来資産推移（実績/予測/イベント） — 想定利回り反映済み'
+      : '将来資産推移（実績/予測/イベント）';
+  }
 
   new Chart(canvas.getContext('2d'), {
     type: 'line',
@@ -163,7 +194,6 @@ export async function renderSimulationChart() {
         slots.forEach(s => {
           const x = s.x;
 
-          // 縦線
           ctx.strokeStyle = 'rgba(225, 87, 89, 0.7)';
           ctx.lineWidth = 1;
           ctx.setLineDash([3, 3]);
@@ -173,13 +203,10 @@ export async function renderSimulationChart() {
           ctx.stroke();
           ctx.setLineDash([]);
 
-          // ラベル背景
           ctx.font = 'bold 10px sans-serif';
           const textW = ctx.measureText(s.label).width;
           ctx.fillStyle = 'rgba(255,255,255,0.85)';
           ctx.fillRect(x + 2, s.y - 11, textW + 4, 13);
-
-          // ラベル文字
           ctx.fillStyle = '#c62828';
           ctx.fillText(s.label, x + 4, s.y);
         });

@@ -60,19 +60,19 @@ const ASSET_GROUPS = [
   { group: '年金残高', items: ['確定拠出年金', '退職金残高'] },
 ];
 const ASSET_CATEGORY_DEFS = [
-  { name: 'ゆうちょ（父）', type: 'asset' },
-  { name: 'ゆうちょ（悠真）', type: 'asset' },
-  { name: '楽天銀行', type: 'asset' },
-  { name: '千葉銀行', type: 'asset' },
-  { name: '財形貯蓄', type: 'asset' },
-  { name: '東京海上日動終身保険', type: 'asset' },
-  { name: '個人年金', type: 'asset' },
-  { name: '三菱UFJ証券', type: 'asset' },
-  { name: '楽天証券', type: 'asset' },
-  { name: '田中貴金属工業', type: 'asset' },
-  { name: '確定拠出年金', type: 'asset' },
-  { name: '退職金残高', type: 'asset' },
-  { name: '自動車ローン残高', type: 'liability' },
+  { name: 'ゆうちょ（父）',           type: 'asset',     expectedReturn: 0 },
+  { name: 'ゆうちょ（悠真）',         type: 'asset',     expectedReturn: 0 },
+  { name: '楽天銀行',                 type: 'asset',     expectedReturn: 0 },
+  { name: '千葉銀行',                 type: 'asset',     expectedReturn: 0 },
+  { name: '財形貯蓄',                 type: 'asset',     expectedReturn: 0 },
+  { name: '東京海上日動終身保険',     type: 'asset',     expectedReturn: 0 },
+  { name: '個人年金',                 type: 'asset',     expectedReturn: 0 },
+  { name: '三菱UFJ証券',              type: 'asset',     expectedReturn: 3 },
+  { name: '楽天証券',                 type: 'asset',     expectedReturn: 3 },
+  { name: '田中貴金属工業',           type: 'asset',     expectedReturn: 2 },
+  { name: '確定拠出年金',             type: 'asset',     expectedReturn: 3 },
+  { name: '退職金残高',               type: 'asset',     expectedReturn: 0 },
+  { name: '自動車ローン残高',         type: 'liability', expectedReturn: 0 },
 ];
 const ASSET_CATEGORIES = ASSET_CATEGORY_DEFS.filter(c => c.type !== 'liability').map(c => c.name);
 const LIABILITY_CATEGORIES = ASSET_CATEGORY_DEFS.filter(c => c.type === 'liability').map(c => c.name);
