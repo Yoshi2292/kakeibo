@@ -7,6 +7,10 @@ import { loadMonthAssets, saveMonthAssets, loadAssetChart, loadReturnRates, save
 import { loadCashflow, saveCashflow } from './cashflow.js';
 import { initForecastSection, refreshForecastView } from './forecast.js';
 import { renderSimulationChart } from './simulate.js';
+import {
+  readCsvFile, parseCardCsv, signatureOf, fetchExistingSignatures,
+  loadPayeeCategoryMap, commitPayeeCategoryChoices,
+} from './csvimport.js';
 
 // ── State ─────────────────────────────────
 let capturedImages = []; // [{dataUrl, base64}, ...]
@@ -17,7 +21,10 @@ let autoSave      = false;
 
 // ── DOM ───────────────────────────────────
 const $ = (id) => document.getElementById(id);
-const SECTIONS = ['auth', 'camera', 'form', 'success', 'stats', 'assets', 'forecast', 'simulate'];
+const SECTIONS = ['auth', 'camera', 'form', 'success', 'stats', 'assets', 'forecast', 'simulate', 'csvimport'];
+
+// ── CSV import state ──────────────────────
+let csvRows = []; // [{date, rawStore, store, amount, dup, candidates, included, medium, user, status}, ...]
 
 // ── Stats state ───────────────────────────
 let statsTab = 'monthly';
@@ -179,6 +186,40 @@ function bindEvents() {
     } finally {
       setAssetsLoading(false);
     }
+  });
+
+  // CSV import
+  $('btn-csvimport').addEventListener('click', () => {
+    resetCsvImport();
+    showSection('csvimport');
+  });
+  $('btn-back-csvimport').addEventListener('click', () => showSection('camera'));
+
+  $('csv-file-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (file) await handleCsvFile(file);
+  });
+
+  $('btn-csvimport-selectall').addEventListener('click', () => {
+    const anyUnchecked = csvRows.some(r => !r.included);
+    csvRows.forEach(r => { r.included = anyUnchecked; });
+    renderCsvList();
+  });
+
+  $('btn-csvimport-submit').addEventListener('click', submitCsvImport);
+
+  $('csvimport-list').addEventListener('change', (e) => {
+    const rowEl = e.target.closest('.csv-row');
+    if (!rowEl) return;
+    const item = csvRows[Number(rowEl.dataset.index)];
+    if (!item) return;
+    if (e.target.classList.contains('csv-check'))          item.included = e.target.checked;
+    else if (e.target.classList.contains('csv-medium-select')) item.medium = e.target.value;
+    else if (e.target.classList.contains('csv-user-select'))   item.user = e.target.value;
+    else if (e.target.classList.contains('csv-store-input'))   item.store = e.target.value.trim();
+    updateCsvRowVisual(rowEl, item);
+    updateCsvSummary();
   });
 
   // Stats
@@ -370,6 +411,171 @@ async function runAutoSave() {
     setSaveLoading(false);
     updateLoadingText('保存中...');
   }
+}
+
+// ── CSV import ────────────────────────────
+function resetCsvImport() {
+  csvRows = [];
+  $('csv-file-input').value = '';
+  $('csvimport-upload').classList.remove('hidden');
+  $('csvimport-summary').classList.add('hidden');
+  $('csvimport-list').innerHTML = '';
+  $('csvimport-actions').classList.add('hidden');
+}
+
+async function handleCsvFile(file) {
+  setCsvLoading(true, 'CSVを解析中...');
+  try {
+    const text = await readCsvFile(file);
+    const parsed = parseCardCsv(text);
+    if (!parsed.length) {
+      showToast('取引データが見つかりませんでした', 'error');
+      return;
+    }
+    setCsvLoading(true, '重複・カテゴリ対応を確認中...');
+    const [existingSigs, payeeMap] = await Promise.all([
+      fetchExistingSignatures(parsed.map(r => r.date)),
+      loadPayeeCategoryMap(),
+    ]);
+    const seenInFile = new Set();
+    csvRows = parsed
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(row => {
+        const sig = signatureOf(row);
+        const dup = existingSigs.has(sig) || seenInFile.has(sig);
+        seenInFile.add(sig);
+        const candidates = payeeMap.get(row.store) ?? [];
+        return {
+          ...row,
+          dup,
+          candidates,
+          included: !dup,
+          medium: candidates[0]?.medium ?? '',
+          user: '',
+        };
+      });
+    renderCsvList();
+    $('csvimport-upload').classList.add('hidden');
+    $('csvimport-actions').classList.remove('hidden');
+  } catch (e) {
+    showToast('CSV読み込みエラー: ' + e.message, 'error');
+  } finally {
+    setCsvLoading(false);
+  }
+}
+
+function renderCsvList() {
+  const list = $('csvimport-list');
+  list.innerHTML = '';
+  csvRows.forEach((item, i) => {
+    const row = document.createElement('div');
+    row.className = 'csv-row';
+    row.dataset.index = i;
+    row.innerHTML = `
+      <input type="checkbox" class="csv-check" ${item.included ? 'checked' : ''}>
+      <div class="csv-row-body">
+        <div class="csv-row-top">
+          <span class="csv-row-date">${item.date}</span>
+          <span class="csv-row-amount">¥${item.amount.toLocaleString()}</span>
+        </div>
+        <div class="csv-row-store">
+          <input type="text" class="csv-store-input" value="${escapeHtml(item.store)}">
+          ${item.dup ? '<span class="csv-badge csv-badge-dup">重複の可能性</span>' : ''}
+        </div>
+        <div class="csv-row-fields">
+          <select class="csv-medium-select">
+            <option value="">中カテゴリを選択</option>
+            ${(CATEGORIES['支出'] || []).map(c => `<option value="${escapeHtml(c)}" ${item.medium === c ? 'selected' : ''}>${c}</option>`).join('')}
+          </select>
+          <select class="csv-user-select">
+            <option value="">使用者</option>
+            ${USERS.map(u => `<option value="${escapeHtml(u)}" ${item.user === u ? 'selected' : ''}>${u}</option>`).join('')}
+          </select>
+        </div>
+        ${item.candidates.length > 1 ? `<div class="csv-row-hint">候補: ${item.candidates.map(c => `${escapeHtml(c.medium)}(${c.count})`).join(' / ')}</div>` : ''}
+      </div>
+    `;
+    updateCsvRowVisual(row, item);
+    list.appendChild(row);
+  });
+  updateCsvSummary();
+}
+
+function updateCsvRowVisual(rowEl, item) {
+  rowEl.classList.toggle('csv-row-dup', !!item.dup);
+  rowEl.classList.toggle('csv-row-warn', item.included && !item.medium);
+}
+
+function updateCsvSummary() {
+  const total    = csvRows.length;
+  const included = csvRows.filter(r => r.included).length;
+  const dup      = csvRows.filter(r => r.dup).length;
+  const box = $('csvimport-summary');
+  box.classList.remove('hidden');
+  box.textContent = `全${total}件 / 選択中${included}件（重複候補${dup}件）`;
+  $('btn-csvimport-submit').textContent = `選択した${included}件を登録`;
+}
+
+async function submitCsvImport() {
+  const included = csvRows.filter(r => r.included);
+  if (!included.length) {
+    showToast('登録する明細を選択してください', 'error');
+    return;
+  }
+  const missing = included.filter(r => !r.medium);
+  if (missing.length) {
+    showToast(`中カテゴリが未選択の明細が${missing.length}件あります`, 'error');
+    renderCsvList();
+    return;
+  }
+
+  setCsvLoading(true, '登録中...');
+  const choices = new Map();
+  let saved = 0;
+  let failed = 0;
+  try {
+    for (let i = 0; i < included.length; i++) {
+      const item = included[i];
+      setCsvLoading(true, `${i + 1} / ${included.length} 件登録中...`);
+      try {
+        await appendRow({
+          date: item.date,
+          large_category: '支出',
+          medium_category: item.medium,
+          store: item.store,
+          amount: item.amount,
+          user: item.user,
+        });
+        item.status = 'done';
+        choices.set(item.store, item.medium);
+        saved++;
+      } catch (e) {
+        console.error('[kakeibo] CSV import row failed:', e);
+        item.status = 'error';
+        failed++;
+      }
+    }
+    if (choices.size) {
+      try { await commitPayeeCategoryChoices(choices); }
+      catch (e) { console.error('[kakeibo] 支払先カテゴリ対応表の更新に失敗:', e); }
+    }
+    csvRows = csvRows.filter(r => r.status !== 'done');
+    renderCsvList();
+    showToast(failed ? `${saved}件登録、${failed}件失敗しました` : `${saved}件を登録しました`, failed ? 'error' : 'success');
+  } finally {
+    setCsvLoading(false);
+  }
+}
+
+function setCsvLoading(on, text = '読み込み中...') {
+  $('loading-csvimport').classList.toggle('hidden', !on);
+  $('loading-csvimport-text').textContent = text;
+  $('btn-csvimport-submit').disabled = on;
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 // ── Sections ──────────────────────────────

@@ -42,6 +42,7 @@
         <span id="app-version" class="app-version"></span>
       </div>
       <div class="header-actions">
+        <button id="btn-csvimport" class="btn-icon" title="明細CSV取込">📄</button>
         <button id="btn-assets" class="btn-icon" title="資産管理">💰</button>
         <button id="btn-stats" class="btn-icon" title="集計">📈</button>
         <a id="link-sheet" href="#" target="_blank" rel="noopener" class="btn-icon" title="スプレッドシートを開く">📊</a>
@@ -159,6 +160,32 @@
     <div id="loading-save" class="loading-overlay hidden">
       <div class="spinner"></div>
       <p>保存中...</p>
+    </div>
+  </section>
+
+  <!-- ===== CSV Import ===== -->
+  <section id="section-csvimport" class="section">
+    <header class="app-header">
+      <button id="btn-back-csvimport" class="btn-icon" aria-label="戻る">←</button>
+      <h1>明細CSV取込</h1>
+      <span></span>
+    </header>
+    <div class="csvimport-panel">
+      <div id="csvimport-upload" class="csvimport-upload">
+        <p class="csvimport-desc">クレジットカードの利用明細CSVを読み込んで、まとめて家計簿に登録できます。大カテゴリは「支出」固定です。</p>
+        <label for="csv-file-input" class="btn btn-outline btn-large">📄 CSVファイルを選択</label>
+        <input type="file" id="csv-file-input" accept=".csv" class="visually-hidden">
+      </div>
+      <p id="csvimport-summary" class="csvimport-summary hidden"></p>
+      <div id="csvimport-list" class="csvimport-list"></div>
+      <div id="csvimport-actions" class="csvimport-actions hidden">
+        <button id="btn-csvimport-selectall" class="btn btn-outline btn-small">全て選択/解除</button>
+        <button id="btn-csvimport-submit" class="btn btn-primary btn-large">選択した明細を登録</button>
+      </div>
+    </div>
+    <div id="loading-csvimport" class="loading-overlay hidden">
+      <div class="spinner"></div>
+      <p id="loading-csvimport-text">読み込み中...</p>
     </div>
   </section>
 
