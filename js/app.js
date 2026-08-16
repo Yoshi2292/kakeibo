@@ -11,6 +11,7 @@ import {
   readCsvFile, parseCardCsv, signatureOf, fetchExistingSignatures,
   loadPayeeCategoryMap, commitPayeeCategoryChoices,
 } from './csvimport.js';
+import { loadCustomCategories, addCustomCategory, ADD_NEW } from './categories.js';
 
 // ── State ─────────────────────────────────
 let capturedImages = []; // [{dataUrl, base64}, ...]
@@ -25,6 +26,9 @@ const SECTIONS = ['auth', 'camera', 'form', 'success', 'stats', 'assets', 'forec
 
 // ── CSV import state ──────────────────────
 let csvRows = []; // [{date, rawStore, store, amount, dup, candidates, included, medium, user, status}, ...]
+
+// ── Category state（「リスト」タブから読む追加中カテゴリ） ─
+let customCategories = { 支出: [], 収入: [] };
 
 // ── Stats state ───────────────────────────
 let statsTab = 'monthly';
@@ -209,13 +213,21 @@ function bindEvents() {
 
   $('btn-csvimport-submit').addEventListener('click', submitCsvImport);
 
-  $('csvimport-list').addEventListener('change', (e) => {
+  $('csvimport-list').addEventListener('change', async (e) => {
     const rowEl = e.target.closest('.csv-row');
     if (!rowEl) return;
     const item = csvRows[Number(rowEl.dataset.index)];
     if (!item) return;
     if (e.target.classList.contains('csv-check'))          item.included = e.target.checked;
-    else if (e.target.classList.contains('csv-medium-select')) item.medium = e.target.value;
+    else if (e.target.classList.contains('csv-medium-select')) {
+      if (e.target.value === ADD_NEW) {
+        const name = await promptAddCategory('支出'); // CSV取込は大カテゴリ「支出」固定
+        item.medium = name || '';
+        renderCsvList();
+        return;
+      }
+      item.medium = e.target.value;
+    }
     else if (e.target.classList.contains('csv-user-select'))   item.user = e.target.value;
     else if (e.target.classList.contains('csv-store-input'))   item.store = e.target.value.trim();
     updateCsvRowVisual(rowEl, item);
@@ -314,7 +326,7 @@ function bindEvents() {
       if (autoSave) {
         await runAutoSave();
       } else {
-        fillForm(ocrResults[0]);
+        await fillForm(ocrResults[0]);
         updateFormProgress();
         showSection('form');
       }
@@ -332,10 +344,10 @@ function bindEvents() {
   }
 
   // Manual entry
-  $('btn-manual').addEventListener('click', () => {
+  $('btn-manual').addEventListener('click', async () => {
     ocrResults = [{}];
     currentIndex = 0;
-    resetForm();
+    await resetForm();
     $('form-progress').textContent = '';
     showSection('form');
   });
@@ -349,8 +361,18 @@ function bindEvents() {
     $('date-corrected-msg').textContent = '';
   });
 
-  $('field-large-cat').addEventListener('change', (e) => {
-    buildMediumOptions(e.target.value);
+  $('field-large-cat').addEventListener('change', async (e) => {
+    await buildMediumOptions(e.target.value);
+  });
+
+  $('field-medium-cat').addEventListener('change', async (e) => {
+    if (e.target.value !== ADD_NEW) return;
+    const largeCat = $('field-large-cat').value;
+    if (!largeCat) { e.target.selectedIndex = 0; return; }
+    const name = await promptAddCategory(largeCat);
+    await buildMediumOptions(largeCat);
+    if (name) $('field-medium-cat').value = name;
+    else e.target.selectedIndex = 0;
   });
 
   $('entry-form').addEventListener('submit', async (e) => {
@@ -362,7 +384,7 @@ function bindEvents() {
       savedResults.push(data);
       if (currentIndex < ocrResults.length - 1) {
         currentIndex++;
-        fillForm(ocrResults[currentIndex]);
+        await fillForm(ocrResults[currentIndex]);
         updateFormProgress();
         const remaining = ocrResults.length - currentIndex;
         $('btn-save').textContent = `💾 保存して次へ（残り${remaining}件）`;
@@ -379,9 +401,9 @@ function bindEvents() {
   });
 
   // Success
-  $('btn-next').addEventListener('click', () => {
+  $('btn-next').addEventListener('click', async () => {
     resetCamera();
-    resetForm();
+    await resetForm();
     showSection('camera');
   });
 }
@@ -436,6 +458,7 @@ async function handleCsvFile(file) {
     const [existingSigs, payeeMap] = await Promise.all([
       fetchExistingSignatures(parsed.map(r => r.date)),
       loadPayeeCategoryMap(),
+      ensureCustomCategories(),
     ]);
     const seenInFile = new Set();
     csvRows = parsed
@@ -486,7 +509,8 @@ function renderCsvList() {
         <div class="csv-row-fields">
           <select class="csv-medium-select">
             <option value="">中カテゴリを選択</option>
-            ${(CATEGORIES['支出'] || []).map(c => `<option value="${escapeHtml(c)}" ${item.medium === c ? 'selected' : ''}>${c}</option>`).join('')}
+            ${mediumOptionList('支出').map(c => `<option value="${escapeHtml(c)}" ${item.medium === c ? 'selected' : ''}>${c}</option>`).join('')}
+            <option value="${ADD_NEW}">＋ 新規カテゴリを追加...</option>
           </select>
           <select class="csv-user-select">
             <option value="">使用者</option>
@@ -618,19 +642,55 @@ function buildCategoryOptions() {
   });
 }
 
-function buildMediumOptions(largeCat) {
+async function ensureCustomCategories() {
+  try {
+    customCategories = await loadCustomCategories();
+  } catch (e) {
+    console.error('[kakeibo] カテゴリ一覧の取得に失敗:', e);
+  }
+  return customCategories;
+}
+
+function mediumOptionList(largeCat) {
+  const base = CATEGORIES[largeCat] ?? [];
+  const custom = customCategories[largeCat] ?? [];
+  return [...base, ...custom.filter((c) => !base.includes(c))];
+}
+
+// 新規中カテゴリをユーザーに入力させ、「リスト」タブに登録する。キャンセル/失敗時は null。
+async function promptAddCategory(largeCat) {
+  const name = (window.prompt(`新しい中カテゴリ名を入力してください（大カテゴリ: ${largeCat}）`) || '').trim();
+  if (!name) return null;
+  if (mediumOptionList(largeCat).includes(name)) return name; // 既存と同名ならそのまま採用
+  try {
+    await addCustomCategory(largeCat, name);
+    await ensureCustomCategories();
+    showToast(`「${name}」を追加しました`);
+    return name;
+  } catch (e) {
+    showToast('カテゴリの追加に失敗しました: ' + e.message, 'error');
+    return null;
+  }
+}
+
+async function buildMediumOptions(largeCat) {
   const sel = $('field-medium-cat');
   sel.innerHTML = '';
-  const items = CATEGORIES[largeCat] ?? [];
-  if (!items.length) {
+  if (!largeCat) {
     sel.innerHTML = '<option value="">（なし）</option>';
     return;
   }
+  await ensureCustomCategories();
+  const items = mediumOptionList(largeCat);
   items.forEach((cat) => {
     const opt = document.createElement('option');
     opt.value = opt.textContent = cat;
     sel.appendChild(opt);
   });
+  const addOpt = document.createElement('option');
+  addOpt.value = ADD_NEW;
+  addOpt.textContent = '＋ 新規カテゴリを追加...';
+  sel.appendChild(addOpt);
 }
 
 function buildUserOptions() {
@@ -644,7 +704,7 @@ function buildUserOptions() {
 }
 
 // ── Form helpers ──────────────────────────
-function fillForm(ocr) {
+async function fillForm(ocr) {
   const original = ocr.date ?? null;
   const date = sanitizeDate(original) ?? todayISO();
   $('field-date').value = date;
@@ -654,7 +714,7 @@ function fillForm(ocr) {
   $('date-corrected-msg').textContent = corrected ? `日付を自動補正しました（${original} → ${date}）` : '';
   if (ocr.large_category) {
     $('field-large-cat').value = ocr.large_category;
-    buildMediumOptions(ocr.large_category);
+    await buildMediumOptions(ocr.large_category);
   }
   if (ocr.medium_category) $('field-medium-cat').value = ocr.medium_category;
   $('field-store').value  = ocr.store  ?? '';
@@ -695,10 +755,10 @@ function readForm() {
   return Object.fromEntries(new FormData($('entry-form')).entries());
 }
 
-function resetForm() {
+async function resetForm() {
   $('entry-form').reset();
   setDefaultDate();
-  buildMediumOptions('');
+  await buildMediumOptions('');
 }
 
 function setDefaultDate() {
