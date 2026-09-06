@@ -2,5 +2,11 @@ name = "kakeibo-claude-proxy"
 main = "index.js"
 compatibility_date = "2024-01-01"
 
-# CLAUDE_API_KEY はシークレットとして登録（平文でここに書かない）
-# 登録コマンド: wrangler secret put CLAUDE_API_KEY
+# 秘密情報はシークレットとして登録（平文でここに書かない）
+#   wrangler secret put CLAUDE_API_KEY    # Anthropic API キー
+#   wrangler secret put GOOGLE_CLIENT_ID  # config.js と同じ OAuth クライアント ID（発信者検証用）
+#   wrangler secret put ALLOWED_EMAILS    # 許可する Google アカウント。カンマ区切り: a@example.com,b@example.com
+
+# 秘密ではない設定値。OCR で許可するモデルは index.js の ALLOWED_MODELS も参照
+[vars]
+CLAUDE_MODEL = "claude-sonnet-4-6"

@@ -2,34 +2,140 @@
 
 ## プロジェクト概要
 
-家族（自分・妻・子）で共有するスマホ向け家計簿PWA。
+家族（パパ・ママ・悠真）で共有するスマホ向け家計簿 PWA。
+レシート撮影 → Claude OCR → Google Sheets 記帳、資産管理・将来シミュレーションまで行う。
 
-- **フロントエンド**: GitHub Pages (静的HTML/CSS/JS、ES Modules)
-- **OCRプロキシ**: Cloudflare Worker (`cloudflare-worker/`)
-- **データストア**: Google Sheets（月別タブ + 複数管理シート）
-- **認証**: Google OAuth2 (GSI)
+- **フロントエンド**: GitHub Pages（静的 HTML/CSS/JS、ES Modules、PWA）
+  公開 URL: https://yoshi2292.github.io/kakeibo/ ／ リポジトリ: `Yoshi2292/kakeibo`
+- **OCR プロキシ**: Cloudflare Worker（`cloudflare-worker/`、Claude API キーを隠すだけの薄い中継）
+- **データストア**: Google Sheets（月別タブ＋管理シート群、ブラウザから直接 read/write）
+- **認証**: Google OAuth2（GIS、scope=`spreadsheets`）。トークンはメモリ保持のみ（リロードで再ログイン）
 
-## アーキテクチャ
+## データフロー
 
 ```
-index.html
-  js/app.js        — メインコントローラ（セクション制御・全イベント）
-  js/auth.js       — Google OAuth2 / トークン管理
-  js/camera.js     — カメラ・画像入力・リサイズ
-  js/ocr.js        — Claude API呼び出し (Cloudflare Worker経由)
-  js/sheets.js     — Google Sheets書き込み（家計簿行の追加）
-  js/stats.js      — 集計・グラフ（月次円グラフ・年次棒グラフ）
-  js/assets.js     — 資産管理（月次残高入力・利回り読み書き・推移グラフ）
-  js/cashflow.js   — 収支管理（月次収支入力・家計簿自動取込）
-  js/forecast.js   — 収支予測ルール管理（期間ルールのCRUD）
-  js/simulate.js   — 将来資産シミュレーション（グラフ描画）
-  js/csvimport.js  — クレジットカード明細CSV取込（解析・支払先正規化・重複判定・中カテゴリ対応表）
-  js/categories.js — 中カテゴリの追加読み書き（シート「リスト」）
-  css/style.css    — スタイル
-  config.js        — 設定（SPREADSHEET_ID等、gitignore対象）
+                         ┌──────────────────────────────┐
+   git push main ─▶ Actions│  GitHub Pages（静的 PWA）      │
+   （config.js を生成）    │  index.html + js/*.js         │
+                         └───────┬───────────────┬──────┘
+                                 │ ①OCRのみ       │ ②読み書き全部
+                                 ▼               ▼
+                    ┌───────────────────┐  ┌────────────────────────┐
+                    │ Cloudflare Worker  │  │ Google Sheets API v4    │
+                    │ x-api-key を付与    │  │ (ブラウザから直接叩く)     │
+                    └────────┬──────────┘  └────────────────────────┘
+                             ▼
+                    api.anthropic.com/v1/messages
 ```
 
-## セクション構成
+- **① レシート OCR のときだけ** Worker を経由する。ブラウザが画像 base64 を `CONFIG.CLAUDE_PROXY_URL` に POST → Worker が `env.CLAUDE_API_KEY` を `x-api-key` に付けて `api.anthropic.com/v1/messages` へ中継し、レスポンスをそのまま返す。
+  - **アクセス制御（多層）**: リクエストは `Authorization: Bearer <Google アクセストークン>` 必須（`ocr.js` が `auth.js` の `getToken()` で付与）。Worker は Google の `tokeninfo` で検証し、`aud === GOOGLE_CLIENT_ID` かつ `email` が検証済みで `ALLOWED_EMAILS`（カンマ区切り）に含まれなければ 403。外れたトークン無し=401。
+  - Worker はボディも検証する: `Content-Length` とサイズ上限（6MB）、`messages` の形（`user` 1件・`content` は image/text のみ・画像は base64 の jpeg/png/webp・枚数 1–10）、外れると 400/413。
+  - `model` は許可リスト（`claude-haiku-4-5-20251001` / `claude-sonnet-4-6`）で検証、`max_tokens` は Worker が画像枚数から算出。クライアント指定は信用しない。
+  - CORS は `cloudflare-worker/index.js` の `ALLOWED_ORIGIN`（現在 `https://yoshi2292.github.io`）に固定。ブラウザしか従わないため上記トークン検証が実質的な防御線。
+- **② それ以外のデータ操作はすべてブラウザ → Google Sheets REST API v4 直**。自前バックエンドは無い。ログインアカウントに対象スプレッドシートの編集権限が必要。
+- シートのタブは各モジュールの `ensureSheet()` が必要時に自動生成する。
+
+## コマンド
+
+このリポジトリには **`package.json` が無い**（ルート・`cloudflare-worker/` とも）。ビルド／依存管理ツールは使っていない。
+
+| 目的 | コマンド | 補足 |
+|---|---|---|
+| ローカル起動 | **専用スクリプト無し**。`cp config.example.js config.js` で実値を記入し、リポジトリ直下を静的 HTTP で配信する（例: `python3 -m http.server`）。`file://` は ES Modules / Service Worker / fetch が動かないので不可 | この配信コマンド自体はリポジトリで定義されていない一般的な手段 |
+| Worker のローカル実行 | `npx wrangler dev`（`cloudflare-worker/` で実行） | `wrangler` は未インストール。`npx` かグローバル導入が必要。`wrangler dev` はリポジトリには明記されていない標準的な使い方 |
+| Worker のデプロイ | `npx wrangler deploy`（`cloudflare-worker/` で実行） | `cloudflare-worker/index.js` 冒頭コメントに記載。**CI 化されていない・手動** |
+| Worker のシークレット登録 | `npx wrangler secret put CLAUDE_API_KEY` | `cloudflare-worker/index.js` / `wrangler.toml` に記載 |
+| フロントのデプロイ | `git push origin main`（または GitHub Actions 画面から `workflow_dispatch`） | `.github/workflows/deploy.yml`。ローカルからのデプロイコマンドは無い |
+| Lint | **無し**（ESLint 等の設定ファイルなし） | — |
+| 自動テスト | **無し**（テストランナー・テストファイルなし） | 変更後の最低限の構文確認は `node --check js/<file>.js`（パースのみ。`CONFIG` 等の未定義参照は検出しない） |
+
+## デプロイ
+
+| 対象 | 方法 |
+|---|---|
+| フロント | `main` push → `.github/workflows/deploy.yml`。`rsync` でコピー（`config.js` / `config.example.js` / `cloudflare-worker` / `.github` / `.gitignore` を除外）→ シークレット `CLAUDE_PROXY_URL` / `GOOGLE_CLIENT_ID` / `SPREADSHEET_ID` から `config.js` を生成 → `actions/upload-pages-artifact@v3` + `actions/deploy-pages@v4` |
+| Worker | **手動** `npx wrangler deploy`（`cloudflare-worker/`）。シークレット3種: `npx wrangler secret put CLAUDE_API_KEY` / `GOOGLE_CLIENT_ID` / `ALLOWED_EMAILS` |
+
+- **Worker のシークレット**（すべて `wrangler secret put`。リポジトリに直書きしない）:
+  - `CLAUDE_API_KEY` … Anthropic API キー
+  - `GOOGLE_CLIENT_ID` … `config.js` の `CONFIG.GOOGLE_CLIENT_ID` と同値。OCR リクエストの `aud` 照合に使用
+  - `ALLOWED_EMAILS` … OCR を許可する Google アカウントのメールをカンマ区切り（例 `a@example.com,b@example.com`）。**家族の増減時はここを更新して再デプロイ**
+  - `CLAUDE_MODEL` は秘密でないので `wrangler.toml` の `[vars]`。OCR 許可モデルを増やすときは `index.js` の `ALLOWED_MODELS` も合わせる
+- `deploy.yml` に必要な設定: `permissions: contents:read / pages:write / id-token:write`、`environment: name: github-pages`。
+- `config.js` は `.gitignore` 対象。生成される `config.js` の `CATEGORIES` 等は **`deploy.yml` 内にもハードコードされている**（ローカルの `config.js` とは別物）。
+
+## 作業ルール
+
+- **`config.js` は絶対にコミットしない**（`.gitignore` 対象。実 API キー・スプレッドシート ID が入る）。作業後は `git status` で未ステージを確認する。
+- **実際の明細データ・口座残高をコンテキストに貼らない**。共有・添付するサンプルは列構造だけ残して値をマスクしたものを使う（例: 金額を `xxxx`、支払先を `＊＊＊` に置換）。
+- **Google Sheets への書き込みを伴う変更**（`appendRow` / `saveMonthAssets` / `saveCashflow` / `addRule` 系 / `saveReturnRates` / `commitPayeeCategoryChoices` を通る経路）は、**実行前に必ず確認を取る**。検証は本番と別のスプレッドシートのコピーに対して行う。
+- **`CATEGORIES` 等を変更するときは 3 箇所すべてを更新する**:
+  1. `config.js`（ローカル確認用）
+  2. `.github/workflows/deploy.yml` の `config.js` 生成ブロック（本番）
+  3. `js/ocr.js` の `CATEGORIES_HINT`（OCR プロンプトのカテゴリ候補）
+  1 箇所でも漏れると **本番だけ壊れる**（ローカルでは気づけない）。同じく `USERS` / `BUDGET` / `ASSET_*` / `CASHFLOW_*` を変えるときは `config.js` と `deploy.yml` の両方。
+- **Worker でリクエストヘッダ／トークンをログ出力しない**。OCR の `Authorization` ヘッダは `spreadsheets` スコープを持つ生の Google アクセストークン（身元確認のために流用している。「既知の課題」参照）。`console.log(request.headers)` やヘッダ丸ごとのオブザーバビリティ連携を入れると権限が漏れる。ログするなら `email` だけに絞る。
+- **`main` で直接作業しない**。作業ブランチを切り、PR 経由でマージする。
+
+## 検証
+
+自動テストは無いので、変更箇所に応じて以下を手動で確認する。
+
+### 共通
+1. 変更した JS を `node --check js/<file>.js` で構文確認。
+2. ローカルを HTTP 配信し、ブラウザの DevTools コンソールを開いた状態で起動 → boot 時にエラーが出ないこと（`[kakeibo] ...` のログは正常）。
+3. `config.js` の `SPREADSHEET_ID` を**使い捨てのコピーシート**に向け、そのシートを編集できる Google アカウントでログイン。
+4. `git status` で `config.js` がステージされていないこと。
+
+### 変更した機能ごと
+- **レシート OCR / 手動入力**: 撮影 or ライブラリ選択 → OCR → 確認フォーム → 保存 → 対象月タブ `YYYY.M` に 1 行増え、`日付 / 大 / 中 / 支払先 / 金額 / 使用者` が正しい列に入ること。自動保存モードでも同じ結果になること。
+- **CSV 取込**: マスク済みサンプル CSV で一覧表示 → 重複バッジ・中カテゴリ候補が出る → 「選択した N 件を登録」で行が消え、シートに追加され、`支払先カテゴリ` の件数が更新されること。失敗行はチェックが残ること。
+- **集計（stats）**: 月次／年次タブでグラフが描画され合計金額が妥当。**新形式・旧形式どちらのタブでも列ズレが無い**こと。
+- **資産管理・残高入力**: 「前月引継ぎ」→ 保存 → リロードで復元。`資産管理` シートの A 列が `YYYY-MM` の**文字列**で入っている（日付シリアル値になっていない）こと。
+- **資産管理・収支**: 「家計（家計簿より）」に当月支出合計が自動表示、「前月」ボタン、保存 → 復元。
+- **収支予測（forecast）**: ルールの追加／編集／削除後、一覧とシート `収支予測` A:G が一致。適用月（G 列 0/1–12）・振替先（F 列）が保存されること。
+- **シミュレーション（simulate）**: 実線（実績）＋破線（予測）で描画、一時イベントの赤い縦線、ズーム／パン操作、`利回り設定` があるとラベルに「想定利回り反映済み」。
+- **Service Worker を変更した場合**: `sw.js` の `CACHE` 名を上げ、DevTools > Application > Service Workers で旧 SW 破棄・新 SW 有効化を確認。JS/CSS が `no-store` で最新取得されること。
+
+### デプロイ後
+- GitHub Actions が成功。公開 URL でバージョン表記（`BUILD_TIME`）が更新されていること。
+- Worker を変更した場合は `wrangler deploy` 後に実機で OCR が通ること。
+
+## ファイル構成
+
+### ルート
+
+| パス | 役割 |
+|---|---|
+| `index.html` | 全画面のマークアップ。9 セクションを `.active` クラスで切替。末尾で CDN と `config.js` を読み込む |
+| `config.js` | 実値の設定＋分類マスター（`CONFIG` / `CATEGORIES` / `USERS` / `BUDGET` / `ASSET_GROUPS` / `ASSET_CATEGORY_DEFS` / `ASSET_CATEGORIES` / `LIABILITY_CATEGORIES` / `CASHFLOW_INCOME` / `CASHFLOW_EXPENSE` をグローバル変数として定義）。`.gitignore` 対象、本番は Actions が生成 |
+| `config.example.js` | 上記のテンプレート（唯一 git 追跡される設定ファイル） |
+| `sw.js` | Service Worker（キャッシュ名 `kakeibo-v5`） |
+| `manifest.json` / `icons/` / `css/` | PWA 資材 |
+| `APIKeys.txt` | ローカルのみのメモ（git 未追跡）。`.gitignore` には未記載なので誤コミット注意 |
+| `Readme.md` | 利用者向けガイド＋更新履歴 |
+| `.github/workflows/deploy.yml` | GitHub Pages デプロイ＋`config.js` 生成 |
+| `cloudflare-worker/index.js`, `wrangler.toml` | Claude API プロキシ |
+
+### js/（ES Modules、`app.js` がエントリ）
+
+| ファイル | 役割 | 触るシート |
+|---|---|---|
+| `app.js` | メインコントローラ。全 import・状態管理・イベントバインド・セクション制御・資産/収支/CSV/集計の描画ロジック | — |
+| `auth.js` | Google OAuth2（GIS token client、scope=`spreadsheets`）。トークンはメモリ保持のみ | — |
+| `camera.js` | `camera-input` / `gallery-input` からの画像取得、canvas でリサイズ（既定 800px）、JPEG base64 化 | — |
+| `ocr.js` | プロンプト生成（`CATEGORIES_HINT` をハードコード）、Worker 経由で Claude Messages API を呼び、JSON を抽出 | — |
+| `sheets.js` | 家計簿 1 行の追加（`appendRow`）。月別タブの自動生成・書式付与・新旧フォーマット判定 | `YYYY.M` |
+| `stats.js` | 月次/年次の集計と Chart.js 描画。ヘッダーから列位置を推定 | `YYYY.M`（読取） |
+| `assets.js` | 資産残高の read/write（upsert）、利回り設定の read/write、純資産推移グラフ | `資産管理`, `利回り設定` |
+| `cashflow.js` | 月次収支の read/write、家計簿シートから当月「支出」合計を自動集計 | `キャッシュフロー`, `YYYY.M`（読取） |
+| `forecast.js` | 収支予測ルールの CRUD（削除/更新は A2:G を clear→全行再 append）、ルール一覧 UI | `収支予測` |
+| `simulate.js` | 直近残高＋予測ルール＋利回りで 2070 年 12 月まで月次シミュレーション、Chart.js 折れ線 | `資産管理`, `収支予測`, `利回り設定`（読取） |
+| `csvimport.js` | カード明細 CSV パース、支払先正規化、重複判定、支払先→中カテゴリ対応表の read/write | `支払先カテゴリ`, `YYYY.M`（読取） |
+| `categories.js` | `リスト` シートから追加中カテゴリを read、新規行を append | `リスト` |
+
+## 画面セクション構成
 
 | セクションID | 役割 | 遷移元 |
 |---|---|---|
@@ -43,42 +149,112 @@ index.html
 | section-simulate | 将来資産シミュレーション | assets(🧮) |
 | section-csvimport | クレジットカード明細CSV取込 | camera(📄) |
 
-## Sheets構成
+## スプレッドシートのスキーマ
 
-| タブ名 | 用途 | 列構成 |
+**単一の定義ファイルは無く、2 系統に分散している。**
+
+### (A) シートの列名（＝各モジュールの `ensureSheet()` 内リテラル）
+
+| タブ | 列 | 定義場所 |
 |---|---|---|
-| `YYYY.M`（例: 2026.6） | 家計簿データ（月別） | B=日付, C=空白, D=大カテゴリ, E=中カテゴリ, F=支払先, G=金額, H=使用者 |
-| `資産管理` | 資産残高（月次） | A=年月(YYYY-MM), B=カテゴリ, C=残高 |
-| `キャッシュフロー` | 収支手動入力（月次） | A=年月(YYYY-MM), B=科目, C=金額 |
-| `収支予測` | 収支予測期間ルール | A=開始年月(YYYY-MM), B=終了年月(YYYY-MM), C=項目名, D=収支区分(income\|expense), E=金額, F=振替先カテゴリ（空欄可）, G=適用月（0=毎月, 1-12=毎年X月） |
-| `支払先カテゴリ` | CSV取込時の支払先→中カテゴリ対応表（学習用） | A=支払先（正規化後）, B=中カテゴリ, C=選択件数 |
-| `利回り設定` | 資産カテゴリ別年間利回り | A=カテゴリ名, B=年利% |
-| `リスト` | 中カテゴリの追加分（アプリから新規作成した分のみB列が入る） | A=項目, B=大カテゴリ（支出\|収入）, C=（アプリ未使用。既存の使用者リスト等が入っている） |
+| `YYYY.M`（家計簿・月別。タブ名はゼロ埋めなし。例 `2026.6`） | B=日付, C=空, D=大カテゴリ, E=中カテゴリ, F=支払先, G=金額, H=使用者 | `sheets.js` `HEADER_ROW` |
+| `資産管理` | A=年月(`YYYY-MM`), B=カテゴリ, C=残高 | `assets.js` |
+| `キャッシュフロー` | A=年月(`YYYY-MM`), B=科目, C=金額 | `cashflow.js` |
+| `収支予測` | A=開始年月, B=終了年月, C=項目名, D=収支区分, E=金額, F=振替先, G=適用月 | `forecast.js` |
+| `利回り設定` | A=カテゴリ, B=利回り% | `assets.js` |
+| `支払先カテゴリ` | A=支払先(正規化後), B=中カテゴリ, C=件数 | `csvimport.js` |
+| `リスト` | A=項目, B=大カテゴリ（アプリから追加した行のみ B 列が入る） | `categories.js`（ヘッダー生成なし。既存シート前提） |
 
-備考:
-- 旧形式の `ライフイベント` シートは廃止。一時イベント（start === end）は `収支予測` に統合。
-- 家計簿シートは「新形式」（B列スタート + C列空白）と「旧形式」（B列スタート）を自動判定（stats.js / cashflow.js）。
-- `収支予測` G列は後から追加。既存行はG列なし → `Number(row[6]) || 0` で毎月扱いに互換。
-- `リスト` タブは元々スプレッドシート側の入力規則用に手動で作られていたシートで、既存行の多くはB列（大カテゴリ）が空。アプリはB列が `支出`/`収入` の行だけを追加中カテゴリとして読み込むため、既存の空B列行とは干渉しない。
+- 旧 `ライフイベント` シートは廃止。一時イベントは `収支予測` に `開始年月 === 終了年月` で統合。
+- `リスト` タブは元々スプレッドシート側の入力規則用に手動作成されたシートで、既存行の多くは B 列が空。アプリは B 列が `支出`/`収入` の行だけを追加中カテゴリとして読むため、既存の空 B 列行とは干渉しない。
 
-## 設定（config.js）
+### 家計簿シートの新形式／旧形式判定（4 モジュールで実装が 2 通り）
 
-```js
-const CONFIG = { CLAUDE_PROXY_URL, GOOGLE_CLIENT_ID, SPREADSHEET_ID, SHEET_NAME, CLAUDE_MODEL, BUILD_TIME };
-const CATEGORIES  = { '支出': [...], '収入': [...] };
-const BUDGET      = { カテゴリ名: 予算額 };          // 月次支出グラフの予算ライン
-const USERS       = ['パパ', 'ママ', '悠真'];
-const ASSET_GROUPS = [{ group, items }];              // UIグループ表示用
-const ASSET_CATEGORY_DEFS = [{ name, type, expectedReturn }];
-  // type: 'asset' | 'liability'
-  // expectedReturn: 年利%のデフォルト値（0=利回りなし）
-const ASSET_CATEGORIES    = ASSET_CATEGORY_DEFS.filter(c => c.type !== 'liability').map(c => c.name);
-const LIABILITY_CATEGORIES = ASSET_CATEGORY_DEFS.filter(c => c.type === 'liability').map(c => c.name);
-const CASHFLOW_INCOME  = [...];   // キャッシュフロー収入科目
-const CASHFLOW_EXPENSE = [...];   // キャッシュフロー支出科目
-```
+- **新形式**: B=日付, C=空, D=大カテゴリ … H=使用者
+- **旧形式**: B=日付, C=大カテゴリ … G=使用者
+- 判定方法が分かれている（**整形済みシートでは結果は一致するが、実装は別物**）:
+  - **`sheets.js` / `csvimport.js`**: ヘッダー行の C1（`header[1]`）が空文字なら新形式（`hasGapCol`）。以降は固定オフセットで列を取る（`csvimport.js`: store=`hasGapCol?4:3`, amount=`hasGapCol?5:4`）。
+  - **`stats.js` / `cashflow.js`**: ヘッダーから「大」を含むセルを `findIndex(h => String(h).includes('大'))` で探し、中カテゴリ=+1・金額=+3 で相対参照。見つからない場合は新形式の索引（大=2, 金額=5）にフォールバック。C1 は見ていない。
+  - 変則ヘッダー（C1 に空白文字が入る等）には `sheets.js` / `csvimport.js` 系が弱い。
 
-`config.js` は `.gitignore` 対象。GitHub Actions が `config.example.js` を参照して生成する。
+### (B) 分類コード体系（＝ `config.js`。本番は `deploy.yml` が同内容を再定義）
+
+- `CATEGORIES = { '支出': […], '収入': […] }` … 大カテゴリは `支出`/`収入` の 2 値。中カテゴリのマスター一覧
+- `USERS` … 使用者
+- `BUDGET` … 中カテゴリ名 → 予算額（月次グラフの予算ライン）
+- `ASSET_CATEGORY_DEFS = [{ name, type: 'asset' | 'liability', expectedReturn }]`
+  → `ASSET_CATEGORIES` / `LIABILITY_CATEGORIES` はここから派生
+- `ASSET_GROUPS` … 残高入力画面のグループ表示用
+- `CASHFLOW_INCOME` / `CASHFLOW_EXPENSE` … キャッシュフローの手動科目
+
+英字コードは次の 2 組だけ:
+- **収支区分**（`収支予測` D 列）: `'income'` / `'expense'` — `forecast.js` / `simulate.js` のリテラル
+- **資産種別**: `'asset'` / `'liability'` — `ASSET_CATEGORY_DEFS[].type`
+
+その他のコード規約:
+- **適用月**（`収支予測` G 列）: `0`=毎月、`1`–`12`=毎年その月のみ。空欄は `Number(row[6]) || 0` で毎月扱い（後方互換）
+- **一時イベント**: 専用フラグは無く `開始年月 === 終了年月` で表現
+- **OCR 用カテゴリヒント**: `ocr.js` の `CATEGORIES_HINT` に中カテゴリ一覧を**別途ハードコード**（`config.js` と手動同期。「作業ルール」参照）
+
+### (C) 値の書式規約
+
+- 年月列は `YYYY-MM`（資産管理・キャッシュフロー・収支予測・利回り設定）
+- 家計簿の日付は `YYYY-MM-DD` 文字列（Sheets のシリアル値で入っている行にも `csvimport.js` の `cellToISODate` が両対応）
+- 月別タブ名は `YYYY.M`（`sheets.js` `dateToSheetName`）
+- **`valueInputOption` は用途で固定**:
+  - `USER_ENTERED`: 家計簿 1 行の追加（`sheets.js` `appendRow`）、全シートのヘッダー行書き込み、既存セルの更新 `values:batchUpdate`（`cashflow.js` / `assets.js` — 更新するのは**金額セルのみ**）
+  - `RAW`: `:append` + `insertDataOption=INSERT_ROWS` による行追加すべて（`categories.js` / `forecast.js` の追加・全行再書き込み / `cashflow.js`・`assets.js` の新規行 / `saveReturnRates` / `commitPayeeCategoryChoices`）
+  - 年月列（`YYYY-MM`）を書くのは RAW の append のみ。`USER_ENTERED` だと `YYYY-MM` が日付シリアル値に変換されるため。`USER_ENTERED` の `values:batchUpdate` は金額セルしか触らないので影響しない。
+
+## 毎月／更新時の手作業
+
+### 毎月（アプリ画面で入力。コード変更なし）
+
+1. **レシート記録**: 撮影 → OCR 確認 → 保存 ／ 手動入力 ／ カード明細 CSV 取込。月別タブは自動生成
+2. **資産管理・残高入力**: 各口座・資産の残高を手入力（「前月引継ぎ」で前月値をコピー可）＋各資産の利回り%
+3. **資産管理・収支**: 会社給与・賞与・手動支出科目を入力（「前月」ボタンあり）。家計簿からの当月支出合計は自動
+
+### 設定・コードの手動更新が要る工程
+
+| 変更内容 | 手を入れる箇所 |
+|---|---|
+| 中カテゴリ追加（恒久反映） | アプリの「＋新規カテゴリ」で `リスト` シートには入るが、恒久化には `config.js` `CATEGORIES` ＋ `deploy.yml` 生成ブロック ＋ `ocr.js` `CATEGORIES_HINT` の**3 箇所**を手動同期 |
+| 大カテゴリ追加 | 不可（`支出`/`収入` の 2 値固定） |
+| 口座・資産カテゴリ、`BUDGET`、`USERS`、`CASHFLOW_*` の増減 | `config.js` と `deploy.yml` の**2 箇所**を手動同期 |
+| 対応カード会社の追加 | `csvimport.js` `parseCardCsv` がセゾン形式（`利用日,` ヘッダー）決め打ち。他社は改修必要 |
+| 支払先の表記ゆれ | `csvimport.js` `normalizePayee` にルールをハードコード追記 |
+| Service Worker のキャッシュ戦略変更 | `sw.js` の `kakeibo-v5` を手動インクリメント |
+| Worker 側の変更 | 手動 `wrangler deploy`（CI 化されていない） |
+| GitHub Pages の公開 URL 変更 | `cloudflare-worker/index.js` `ALLOWED_ORIGIN` を手動修正 |
+| 年替わり | `CONFIG.SHEET_NAME`（`'2025'` 固定）・`BUILD_TIME` はズレたまま。月別タブは日付から生成されるので実害は小さいが放置状態 |
+
+## 開発上の注意
+
+- ES Modules（`type="module"`）使用。`CONFIG` / `CATEGORIES` / `BUDGET` / `USERS` / `ASSET_GROUPS` / `ASSET_CATEGORY_DEFS` / `ASSET_CATEGORIES` / `LIABILITY_CATEGORIES` / `CASHFLOW_INCOME` / `CASHFLOW_EXPENSE` はグローバル変数（`config.js` で定義）。
+- `forecast.js` と `simulate.js` は boot 時に API を呼ばない。ユーザーが画面を開いたときに初めてフェッチする。
+- 認証トークンはメモリのみ（リロードで再ログイン）。
+- `CONFIG.SHEET_NAME`（`'2025'`）は現状ほぼ形骸フィールド（`app.js` は `BUILD_TIME` のみ表示に使用、月別タブは日付から生成）。
+
+## 既知の課題
+
+### 家計簿シートの新旧フォーマット判定が 2 実装に分裂している（技術的負債）
+
+- `sheets.js` / `csvimport.js` は「ヘッダー行 C1（`header[1]`）が空文字か」で新旧を判定し、固定オフセットで列を取る。
+- `stats.js` / `cashflow.js` は「ヘッダーに『大』を含むセルを `findIndex` で探す」方式で大カテゴリ列を特定し、中=+1・金額=+3 で相対参照する（見つからなければ新形式索引にフォールバック）。
+- 整形済みの新形式・旧形式シートでは**両者の結果は一致する**が、変則ヘッダー（C1 に空白文字が入る、見出し語が「大区分」など別表記、列が 1 つずれている等）では**解釈が割れうる**。
+- そのとき症状は「**記帳（`appendRow`）は通るが、集計だけがずれる**」形で顕在化する。`sheets.js` の判定で書き込んだ列位置と、`stats.js` / `cashflow.js` の判定で読む列位置が食い違うため、家計簿への追加は成功し続けるのに月次/年次グラフやキャッシュフローの家計自動取込だけが誤った金額を出す。書き込み側が無事なので気づきにくい。
+- **将来の統一方針**: 判定ロジックを 1 つの関数（例: `detectSheetLayout(header)` → `{ dateIdx, largeIdx, mediumIdx, storeIdx, amountIdx, userIdx }`）に切り出し、`sheets.js` / `stats.js` / `cashflow.js` / `csvimport.js` の 4 ファイルがそれを参照する形にする（実装は未着手）。
+
+### OCR 認証に Sheets のアクセストークンを流用している（意識的な妥協）
+
+- Worker が必要としているのは「発信者が許可アカウントか」だけだが、送っているのは `spreadsheets` スコープ付きの生アクセストークン＝そのユーザーのスプレッドシートを読み書きできる権限そのもの。最小権限から外れている。
+- Worker は自分のコードなので即座の実害は無いが、**ヘッダをログ／オブザーバビリティに流した瞬間に権限が漏れる**。→「作業ルール」に禁止事項として明記済み。
+- 本来は ID トークン（JWT）を送り `tokeninfo?id_token=` で検証するのが筋。ID トークンは身元の主張のみで、盗まれても Sheets は触れない。ただし GIS の token client から ID トークンは取れず、`google.accounts.id` 側の導線を別途足す追加工数が要るため見送り。
+- 残存リスク: トークン有効期限（≈1時間）内はリプレイ可能。現状は許容。
+
+---
+
+以下は機能別の詳細仕様（旧 CLAUDE.md からマージ）。
 
 ## section-assets の内部タブ
 
@@ -176,23 +352,8 @@ for (const r of active) { /* income/expense + transfer 分岐 */ }
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/..."></script>  <!-- ズーム・パン -->
 ```
 
-## デプロイ
-
-`.github/workflows/deploy.yml`:
-- `actions/upload-pages-artifact@v3` + `actions/deploy-pages@v4` でGitHub Pages公式方式でデプロイ（`peaceiris` 方式は廃止）。
-- `permissions: contents: read, pages: write, id-token: write` が必要。
-- `environment: name: github-pages` が必要（`deploy-pages` の要件）。
-- シークレット: `CLAUDE_PROXY_URL`, `GOOGLE_CLIENT_ID`, `SPREADSHEET_ID`
-
 ## Service Worker
 
 - キャッシュ名: `kakeibo-v5`（キャッシュ戦略を変更したらバージョンを上げること）。
 - アイコン・マニフェストのみキャッシュ優先、JS/CSS/HTML は `cache: 'no-store'` でHTTPキャッシュをバイパスしてネットワーク優先。
 - activate 時に旧バージョンキャッシュ（名前が異なるもの）を全削除。
-
-## 開発上の注意
-
-- `valueInputOption=RAW` を使用（`USER_ENTERED` だと `YYYY-MM` がシリアル番号に変換されるバグあり）。
-- ES Modules (`type="module"`) 使用。`CONFIG` / `CATEGORIES` / `BUDGET` / `USERS` / `ASSET_GROUPS` / `ASSET_CATEGORY_DEFS` / `ASSET_CATEGORIES` / `LIABILITY_CATEGORIES` / `CASHFLOW_INCOME` / `CASHFLOW_EXPENSE` はグローバル変数（`config.js` で定義）。
-- `forecast.js` と `simulate.js` は boot 時に API を呼ばない。ユーザーが画面を開いたときに初めてフェッチする。
-- 収支予測の毎年ルール: G列が0または空 → 毎月適用（後方互換）。1〜12 → 毎年その月のみ適用。

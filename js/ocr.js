@@ -1,3 +1,5 @@
+import { getToken } from './auth.js';
+
 const CATEGORIES_HINT = '食費/日用雑貨/外食費/医療費/被服費/電気代/水道代/交際費/スマホ通信費/スマホローン/都民共済/金・銀・プラチナ積立/プロバイダ料金/車関係費/フィットネス費/ペット費/教育費/娯楽費/税金/悠真おこづかい/通信費/設備費/給与/子供手当/割戻金/その他';
 
 let _model = null;
@@ -62,9 +64,16 @@ export async function analyzeReceipts(images) {
   }));
   content.push({ type: 'text', text: buildPrompt(images.length) });
 
+  // Worker は Google アクセストークンで発信者を検証する（許可メール以外は 403）
+  const token = await getToken();
+
   const res = await fetch(CONFIG.CLAUDE_PROXY_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    // model は Worker 側の許可リストで検証、max_tokens は Worker 側で算出（下の値は無視される）
     body: JSON.stringify({
       model: getModel(),
       max_tokens: 512 * images.length,
@@ -74,6 +83,9 @@ export async function analyzeReceipts(images) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(err.error?.message ?? 'OCR プロキシに拒否されました（ログイン状態・許可アカウントを確認してください）');
+    }
     throw new Error(err.error?.message ?? `OCR 失敗 (${res.status})`);
   }
 
